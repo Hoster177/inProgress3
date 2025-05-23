@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1053109057863",
+    "project_id": "inprogress-177",
+    "storage_bucket": "inprogress-177.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1053109057863:android:bae37a2c97142b58eef462",
+        "android_client_info": {
+          "package_name": "ru.hoster.inprogress"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1053109057863-psunbtvpovqpjasd5ig9u3gsbssk78v4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTDvoE1w3Uulhnh1rnX379b7XAtoN_QIk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1053109057863-psunbtvpovqpjasd5ig9u3gsbssk78v4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
