@@ -57,4 +57,25 @@ interface ActivityDao {
 
     @Query("UPDATE activity_items SET isActive = :isActive WHERE firebaseId = :firebaseId")
     suspend fun updateActiveStateForActivityByFirebaseId(firebaseId: String, isActive: Boolean)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE) // OnConflict можно выбрать другой, если нужно
+    suspend fun insertActivity(activity: ActivityItem): Long // Возвращает new rowId
+
+
+
+    @Query("DELETE FROM activity_items WHERE id = :activityId OR firebaseId = :activityId") // Универсальное удаление по локальному или firebase ID
+    suspend fun deleteActivity(activityId: String) // Если ID всегда String. Если ID может быть Long, нужно два метода или более сложный запрос.
+
+    @Query("SELECT * FROM activity_items WHERE id = :localId")
+    suspend fun getActivityByLocalId(localId: Long): ActivityItem?
+
+    // Пример Flow для получения всех активностей пользователя (можно фильтровать по дате)
+    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC")
+    fun getActivitiesFlow(userId: String): Flow<List<ActivityItem>>
+
+    // Если нужно получать активности на сегодня (createdAt должен быть правильно настроен)
+    // Это потребует более сложного запроса для сравнения дат, или ты будешь фильтровать в коде.
+    // Пример простого Flow, который ты будешь фильтровать позже:
+    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC") // Добавь фильтр по дате, если нужно
+    fun getActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
 }

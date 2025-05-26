@@ -22,7 +22,7 @@ interface ActivityRepository {
     suspend fun getActivityById(id: String): ActivityItem?
     suspend fun deleteActivity(id: String)
     suspend fun updateActivity(activity: ActivityItem) // Для обновления isActive и т.д.
-    suspend fun addActivity(activityToSave: ActivityItem)
+    suspend fun addActivity(activity: ActivityItem)
 
 
 }

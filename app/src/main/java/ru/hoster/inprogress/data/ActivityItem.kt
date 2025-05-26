@@ -20,6 +20,7 @@ data class ActivityItem(
     var totalDurationMillisToday: Long = 0L,
     var isActive: Boolean = false,
     val colorHex: String? = null, // Assuming it's a nullable String
+    @ServerTimestamp
     val createdAt: Date = Date() // Дата создания или дата, к которой относится активность
     // Добавь другие поля, если они есть, например lastUpdatedAt: Date? = null
 )
