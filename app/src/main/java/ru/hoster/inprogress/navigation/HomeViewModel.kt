@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import ru.hoster.inprogress.data.ActivityItem // Убедись, что импорт правильный
 import ru.hoster.inprogress.data.Goal // Убедись, что импорт правильный
 import ru.hoster.inprogress.domain.model.ActivityRepository
+import ru.hoster.inprogress.domain.model.GoalRepository
 // Замени на реальные пути к твоим репозиториям
 // import ru.hoster.inprogress.domain.repository.ActivityRepository
 // import ru.hoster.inprogress.domain.repository.GoalRepository
@@ -21,10 +22,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 
-interface GoalRepository {
-    fun getActiveGoalsFlow(): Flow<List<Goal>>
-    // Другие методы, если нужны
-}
+
 // Конец Placeholder
 
 fun getCurrentDateStringViewModel(): String { // Переименовал, чтобы не конфликтовать, если оставишь в MainScreen.kt
@@ -43,7 +41,13 @@ fun formatDurationViewModel(millis: Long, forceHours: Boolean = false): String {
     }
 }
 
-
+data class MainScreenUiState(
+    val currentDate: String = getCurrentDateString(),
+    val dailyTotalTimeFormatted: String = "00:00:00",
+    val goals: List<Goal> = emptyList(),
+    val activities: List<ActivityItem> = emptyList(),
+    val isLoading: Boolean = false
+)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val application: Application, // Для запуска сервиса

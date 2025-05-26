@@ -30,13 +30,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.TimeZone // For UTC as requested by user in meta
 
-data class MainScreenUiState(
-    val currentDate: String = getCurrentDateString(),
-    val dailyTotalTimeFormatted: String = "00:00:00",
-    val goals: List<Goal> = emptyList(),
-    val activities: List<ActivityItem> = emptyList(),
-    val isLoading: Boolean = false
-)
+
 data class MainScreenUiStatePlaceholder( // Назовите его в соответствии с вашим реальным UiState
     val isLoading: Boolean = false,
     val userName: String = "User",

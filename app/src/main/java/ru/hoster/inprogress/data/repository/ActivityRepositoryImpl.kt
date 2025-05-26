@@ -2,6 +2,7 @@ package ru.hoster.inprogress.data.repository
 
 import ru.hoster.inprogress.data.ActivityItem
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import ru.hoster.inprogress.data.local.ActivityDao // <<< ИСПРАВЛЕННЫЙ ИМПОРТ
 import ru.hoster.inprogress.domain.model.ActivityRepository
 import javax.inject.Inject
@@ -20,7 +21,7 @@ class ActivityRepositoryImpl @Inject constructor(
         // val startOfDayMillis = today.atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
         // val endOfDayMillis = today.plusDays(1).atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
         // return activityDao.getActivitiesForUserAndDateRangeFlow(userId, startOfDayMillis, endOfDayMillis)
-        return activityDao.getAllActivitiesForUserFlow(userId) // Временно для простоты
+        return flow { emit(emptyList<ActivityItem>()) } // Временно для простоты
     }
 
     override suspend fun getActivityById(id: String): ActivityItem? {
