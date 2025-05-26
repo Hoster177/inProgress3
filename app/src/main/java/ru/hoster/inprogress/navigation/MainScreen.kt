@@ -1,6 +1,7 @@
 package ru.hoster.inprogress.navigation
 import android.app.Application
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -155,8 +157,12 @@ fun MainScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 } else {
+
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(uiState.activities, key = { activity -> activity.firebaseId ?: activity.id }) { activity ->
+                        items(
+                            items = uiState.activities, // Убедись, что это именно uiState.activities
+                            key = { activity -> activity.firebaseId ?: activity.id.toString() } // Изменил activity.id на activity.id.toString() для консистентности ключа
+                        ) { activity ->
                             val idToPass = activity.firebaseId ?: activity.id.toString()
                             ActivityItemRow(
                                 activity = activity,
@@ -206,6 +212,15 @@ fun GoalItem(goal: Goal, onEditClick: () -> Unit) {
         }
     }
 }
+//@Composable
+//fun ActivityItemRow(
+//    activity: ActivityItem,
+//    onTimerToggle: () -> Unit,
+//    onDeleteClick: () -> Unit
+//) {
+//    Box(modifier = Modifier.fillMaxWidth().background(Color.Cyan).padding(4.dp)) {
+//    Text("Activity: ${activity.name} (ID: ${activity.firebaseId ?: activity.id})", modifier = Modifier.padding(16.dp).fillMaxWidth())
+//}}
 
 @Composable
 fun ActivityItemRow(

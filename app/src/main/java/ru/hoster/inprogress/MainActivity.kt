@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -105,7 +106,7 @@ class MainActivity : ComponentActivity() {
                             val homeViewModel: HomeViewModel = hiltViewModel()
                             // Создаем временную заглушку для uiState
                             val placeholderUiState = MainScreenUiState() // Используйте ваше имя класса
-
+                            val uiState by homeViewModel.uiState.collectAsState()
                             MainScreen(
                                 onDailyTimerClick = { navController.navigate(Route.STATISTICS) },
                                 onAddActivityClick = { navController.navigate(Route.addEditActivity()) },
@@ -115,7 +116,7 @@ class MainActivity : ComponentActivity() {
                                 // Замените
                                 onDeleteActivityClick = { activityId -> homeViewModel.onDeleteActivityClick(activityId)},
                                 onActivityTimerToggle = {  activityId, isActive -> homeViewModel.onActivityTimerToggle(activityId, isActive)  /* Пока ничего не делаем */ },
-                                uiState = placeholderUiState, // <--- ЗАМЕНА
+                                uiState = uiState, // <--- ЗАМЕНА
                                 onAddNewGoalClick = { /* Пока ничего не делаем */ },
                                 onViewAllGoalsClick = { /* Пока ничего не делаем */ }
                             )

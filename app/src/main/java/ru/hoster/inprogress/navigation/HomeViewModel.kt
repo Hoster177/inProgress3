@@ -2,6 +2,7 @@ package ru.hoster.inprogress.navigation // Убедись, что пакет п�
 
 import android.app.Application
 import android.content.Intent
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,6 +11,7 @@ import kotlinx.coroutines.launch
 import ru.hoster.inprogress.data.ActivityItem // Убедись, что импорт правильный
 import ru.hoster.inprogress.data.Goal // Убедись, что импорт правильный
 import ru.hoster.inprogress.domain.model.ActivityRepository
+import ru.hoster.inprogress.domain.model.AuthService
 import ru.hoster.inprogress.domain.model.GoalRepository
 // Замени на реальные пути к твоим репозиториям
 // import ru.hoster.inprogress.domain.repository.ActivityRepository
@@ -52,7 +54,8 @@ data class MainScreenUiState(
 class HomeViewModel @Inject constructor(
     private val application: Application, // Для запуска сервиса
     private val activityRepository: ActivityRepository, // Замени на свой реальный репозиторий
-    private val goalRepository: GoalRepository // Замени на свой реальный репозиторий
+    private val goalRepository: GoalRepository, // Замени на свой реальный репозиторий
+    private val authService: AuthService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainScreenUiState(isLoading = true))
@@ -61,28 +64,33 @@ class HomeViewModel @Inject constructor(
     init {
         loadInitialData()
     }
-
+//hoster177@gmail.com
     private fun loadInitialData() {
         viewModelScope.launch {
-            // Комбинируем потоки от активностей и целей
+            Log.d("HomeVM", "loadInitialData called. Setting up combine.") // (1) ЭТОТ ЛОГ ЕСТЬ?
             combine(
                 activityRepository.getActivitiesForTodayFlow(),
                 goalRepository.getActiveGoalsFlow()
-            ) { activities, goals ->
-                // Рассчитываем общее время за день
-                val dailyTotalMillis = activities.sumOf { it.totalDurationMillisToday }
-                MainScreenUiState(
+            ) { activitiesArgument, goalsArgument -> // Переименовал для ясности
+                Log.i("HomeVM_Combine_Lambda", "Inside combine. Activities Argument size: ${activitiesArgument.size}, Goals Argument size: ${goalsArgument.size}")
+
+                val dailyTotalMillis = activitiesArgument.sumOf { it.totalDurationMillisToday }
+                Log.i("HomeVM_Combine_Lambda", "Calculated dailyTotalMillis: $dailyTotalMillis")
+
+                val stateToEmit = MainScreenUiState(
                     currentDate = getCurrentDateStringViewModel(),
                     dailyTotalTimeFormatted = formatDurationViewModel(dailyTotalMillis, forceHours = true),
-                    goals = goals,
-                    activities = activities,
+                    goals = goalsArgument,
+                    activities = activitiesArgument, // Используем переданный аргумент
                     isLoading = false
                 )
+                Log.i("HomeVM_Combine_Lambda", "State to emit. Activities size in state: ${stateToEmit.activities.size}")
+                stateToEmit // Возвращаем созданное состояние
             }.catch { throwable ->
-                // Обработка ошибок загрузки
-                _uiState.value = MainScreenUiState(isLoading = false) // Показать пустой экран или ошибку
-                // Log.e("HomeViewModel", "Error loading data", throwable)
+                Log.e("HomeVM_Combine_Catch", "Error in combine: ${throwable.message}", throwable)
+                _uiState.value = MainScreenUiState(isLoading = false)
             }.collect { combinedState ->
+                Log.i("HomeVM_Collect", "Collecting new combined state. Activities in collected state: ${combinedState.activities.size}. isLoading: ${combinedState.isLoading}")
                 _uiState.value = combinedState
             }
         }

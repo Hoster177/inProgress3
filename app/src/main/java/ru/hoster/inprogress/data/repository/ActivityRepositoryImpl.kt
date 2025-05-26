@@ -11,11 +11,21 @@ import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
+import ru.hoster.inprogress.domain.model.AuthService
 import java.util.Calendar // Для фильтрации по дате
+
+// Убедись, что импортировано
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach // Для логирования эмиссий
+import java.util.Date // Для форматирования в логах
+import java.text.SimpleDateFormat // Для форматирования в логах
+import java.util.Locale // Для форматирования в логах
 
 @Singleton
 class ActivityRepositoryImpl @Inject constructor(
     private val activityDao: ActivityDao,
+    private val authService: AuthService,
     private val firestore: FirebaseFirestore // Убедись, что FirebaseFirestore предоставляется через Hilt (например, в AppModule)
 ) : ActivityRepository {
 
@@ -96,29 +106,50 @@ class ActivityRepositoryImpl @Inject constructor(
 
 
     override fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>> {
-        // Предполагаем, что authService.getCurrentUserId() доступен или ты его получаешь другим способом
-        // Здесь нужен userId для фильтрации. Для примера, я захардкожу, но ты должен получать его динамически.
-        // val currentUserId = authService.getCurrentUserId() ?: return flowOf(emptyList())
-        // Для демонстрации без authService:
-        // return activityDao.getActivitiesForUserFlow("SOME_USER_ID_HERE") // ЗАМЕНИ НА РЕАЛЬНЫЙ ID
-        // Более корректная фильтрация по дате для "сегодня":
-        return activityDao.getActivitiesForUserFlow("SOME_USER_ID_HERE") // Замени на реальный userId
+        val currentUserId = authService.getCurrentUserId()
+
+        if (currentUserId == null) {
+            Log.e("ActivityRepo", "getActivitiesForTodayFlow: No current user ID. Returning empty list.")
+            return flowOf(emptyList())
+        }
+
+        Log.d("ActivityRepo", "getActivitiesForTodayFlow: Called for user ID: $currentUserId")
+
+        return activityDao.getActivitiesForUserFlow(currentUserId)
+            .onEach { activitiesFromDao ->
+                Log.d("ActivityRepo", "getActivitiesForTodayFlow: DAO emitted ${activitiesFromDao.size} activities for user $currentUserId.")
+                // Логируем первые несколько активностей из DAO для проверки
+                activitiesFromDao.take(3).forEach { act ->
+                    Log.d("ActivityRepo", "DAO item: Name='${act.name}', CreatedAt=${formatLogDate(act.createdAt)}, IsActive=${act.isActive}, Duration=${act.totalDurationMillisToday}")
+                }
+            }
             .map { activities ->
-                val todayStart = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
+                val calendar = Calendar.getInstance()
+                val sdfLog = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+
+                val todayStartMillis = calendar.apply {
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val todayEndMillis = calendar.apply {
+                    set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
                 }.timeInMillis
 
-                val todayEnd = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 23)
-                    set(Calendar.MINUTE, 59)
-                    set(Calendar.SECOND, 59)
-                    set(Calendar.MILLISECOND, 999)
-                }.timeInMillis
+                Log.d("ActivityRepo", "Filtering for today: Start=${formatLogDate(Date(todayStartMillis))} (${todayStartMillis}), End=${formatLogDate(Date(todayEndMillis))} (${todayEndMillis})")
 
-                activities.filter { it.createdAt.time in todayStart..todayEnd }
+                val filteredActivities = activities.filter { activity ->
+                    val activityCreatedAt = activity.createdAt.time
+                    val isInRange = activityCreatedAt in todayStartMillis..todayEndMillis
+                    Log.v("ActivityRepo", "Filtering item: Name='${activity.name}', CreatedAt=${formatLogDate(activity.createdAt)} ($activityCreatedAt). In range: $isInRange")
+                    isInRange
+                }
+                Log.d("ActivityRepo", "getActivitiesForTodayFlow: After date filtering, ${filteredActivities.size} activities remain for user $currentUserId.")
+                filteredActivities
+            }
+            .onEach { finalActivities ->
+                Log.i("ActivityRepo", "getActivitiesForTodayFlow: 최종적으로 UI로 전달될 활동 개수: ${finalActivities.size} for user $currentUserId.")
+                finalActivities.take(3).forEach { act ->
+                    Log.i("ActivityRepo", "Final item: Name='${act.name}', CreatedAt=${formatLogDate(act.createdAt)}")
+                }
             }
     }
 
@@ -160,5 +191,10 @@ class ActivityRepositoryImpl @Inject constructor(
             Log.e("ActivityRepo", "Error deleting activity for ID criteria: $activityId", e)
             throw e
         }
+    }
+
+    private fun formatLogDate(date: Date): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z", Locale.US)
+        return sdf.format(date)
     }
 }
