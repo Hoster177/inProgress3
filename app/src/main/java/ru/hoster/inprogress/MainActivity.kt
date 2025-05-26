@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -24,7 +25,7 @@ import ru.hoster.inprogress.navigation.AddEditGoalScreen
 import ru.hoster.inprogress.navigation.bottomNavItems
 import ru.hoster.inprogress.navigation.groups.GroupsScreen
 import ru.hoster.inprogress.navigation.HelpFaqScreen
-import ru.hoster.inprogress.navigation.MainScreen
+import ru.hoster.inprogress.navigation.HomeViewModel
 import ru.hoster.inprogress.navigation.ProfileScreen
 import ru.hoster.inprogress.navigation.Route // Ваш объект Route
 import ru.hoster.inprogress.navigation.Screen // Ваш sealed class Screen для BottomNav
@@ -101,6 +102,7 @@ class MainActivity : ComponentActivity() {
 
                         // --- Основные экраны (с Bottom Navigation) ---
                         composable(Screen.Main.route) {
+                            val homeViewModel: HomeViewModel = hiltViewModel()
                             // Создаем временную заглушку для uiState
                             val placeholderUiState = MainScreenUiState() // Используйте ваше имя класса
 
@@ -111,8 +113,8 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate(Route.addEditGoal(goalId = goalId))
                                 },
                                 // Замените
-                                onDeleteActivityClick = { /* Пока ничего не делаем */ },
-                                onActivityTimerToggle = { _, _ -> /* Пока ничего не делаем */ },
+                                onDeleteActivityClick = { activityId -> homeViewModel.onDeleteActivityClick(activityId)},
+                                onActivityTimerToggle = {  activityId, isActive -> homeViewModel.onActivityTimerToggle(activityId, isActive)  /* Пока ничего не делаем */ },
                                 uiState = placeholderUiState, // <--- ЗАМЕНА
                                 onAddNewGoalClick = { /* Пока ничего не делаем */ },
                                 onViewAllGoalsClick = { /* Пока ничего не делаем */ }

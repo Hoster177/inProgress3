@@ -1,4 +1,6 @@
 package ru.hoster.inprogress.domain.model
+import kotlinx.coroutines.flow.Flow
+import ru.hoster.inprogress.data.ActivityItem
 import java.util.Date
 
 // Represents your actual ActivityItem data model from Firebase/Room
@@ -16,8 +18,11 @@ data class ActivityData(
 )
 
 interface ActivityRepository {
-    suspend fun getActivityById(activityId: String): Result<ActivityData?>
-    suspend fun insertActivity(activity: ActivityData): Result<String> // Returns ID of new activity
-    suspend fun updateActivity(activity: ActivityData): Result<Unit>
-    // Potentially: suspend fun deleteActivity(activityId: String): Result<Unit>
+    fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>>
+    suspend fun getActivityById(id: String): ActivityItem?
+    suspend fun deleteActivity(id: String)
+    suspend fun updateActivity(activity: ActivityItem) // Для обновления isActive и т.д.
+    suspend fun addActivity(activityToSave: ActivityItem)
+
+
 }

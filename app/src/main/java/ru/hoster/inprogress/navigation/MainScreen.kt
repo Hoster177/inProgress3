@@ -1,4 +1,6 @@
 package ru.hoster.inprogress.navigation
+import android.app.Application
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,10 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import dagger.hilt.android.internal.Contexts.getApplication
 import ru.hoster.inprogress.data.ActivityItem
 import ru.hoster.inprogress.data.Goal
 import ru.hoster.inprogress.data.GoalType
+import ru.hoster.inprogress.service.TimerService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,8 +40,10 @@ data class MainScreenUiState(
 data class MainScreenUiStatePlaceholder( // Назовите его в соответствии с вашим реальным UiState
     val isLoading: Boolean = false,
     val userName: String = "User",
-    val activities: List<String> = emptyList() // Примерные поля
-    // ... другие поля, которые ожидает ваш MainScreenUiState
+    val activities: List<String> = emptyList(), // Примерные поля
+    val currentDate: String = getCurrentDateString(),
+    val dailyTotalTimeFormatted: String = "00:00:00",
+    val goals: List<Goal> = emptyList()
 )
 fun formatDuration(millis: Long, forceHours: Boolean = false): String {
     val hours = TimeUnit.MILLISECONDS.toHours(millis)

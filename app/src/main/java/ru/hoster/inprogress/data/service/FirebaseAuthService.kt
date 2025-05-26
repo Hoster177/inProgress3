@@ -18,12 +18,11 @@ import android.util.Log
 
 @Singleton
 class FirebaseAuthService @Inject constructor(
-    private val userRepository: UserRepository // <--- ВНЕДРЯЕМ UserRepository
+    private val userRepository: UserRepository
 ) : AuthService {
 
     private val firebaseAuth: FirebaseAuth = Firebase.auth
 
-    // ... getCurrentUserId() и isUserLoggedIn() остаются без изменений ...
     override fun getCurrentUserId(): String? {
         return firebaseAuth.currentUser?.uid
     }
@@ -44,7 +43,7 @@ class FirebaseAuthService @Inject constructor(
             Result.Success(Unit)
         } catch (e: Exception) {
             Log.e("FirebaseAuthService", "Sign in failed", e)
-            Result.Error(e)
+            Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
         }
     }
 
@@ -53,19 +52,17 @@ class FirebaseAuthService @Inject constructor(
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val userId = authResult.user?.uid
             if (userId != null) {
-                // Создаем профиль пользователя в Firestore
                 val newUser = UserData(
                     userId = userId,
                     email = email,
-                    displayName = email.substringBefore('@') // Простой вариант для displayName по умолчанию
+                    displayName = email.substringBefore('@')
                 )
                 val profileCreationResult = userRepository.createUserProfile(newUser)
                 if (profileCreationResult is Result.Error) {
-                    // Если создание профиля не удалось, можно вернуть ошибку или залогировать
-                    // и продолжить, считая регистрацию в Auth успешной.
-                    // Зависит от вашей логики обработки ошибок.
-                    Log.e("FirebaseAuthService", "Failed to create user profile in Firestore", profileCreationResult.exception)
-                    // Можно вернуть Result.Error(profileCreationResult.exception) если это критично
+                    // Corrected line:
+                    Log.e("FirebaseAuthService", "Failed to create user profile in Firestore",profileCreationResult.message) // Use .error or your actual property name
+                    // Consider if this error should propagate:
+                    // return Result.Error(profileCreationResult.error) // If using .error
                 }
                 Result.Success(userId)
             } else {
@@ -73,7 +70,7 @@ class FirebaseAuthService @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e("FirebaseAuthService", "Sign up failed", e)
-            Result.Error(e)
+            Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
         }
     }
 
@@ -83,7 +80,7 @@ class FirebaseAuthService @Inject constructor(
             Result.Success(Unit)
         } catch (e: Exception) {
             Log.e("FirebaseAuthService", "Sign out failed", e)
-            Result.Error(e)
+            Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
         }
     }
 }

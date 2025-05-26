@@ -6,9 +6,9 @@ import kotlinx.coroutines.flow.Flow
 // Если Result определен в другом месте, например, ru.hoster.inprogress.domain.util.Result,
 // то используйте этот импорт. Для примера, предположим, он здесь же.
 
-sealed class Result<out T> { // Если Result еще не определен, добавьте его
-    data class Success<out T>(val data: T) : Result<T>()
-    data class Error(val exception: Exception) : Result<Nothing>()
+sealed class Result<out T> {
+    data class Success<T>(val data: T) : Result<T>() // Обрати внимание, Success здесь generic
+    data class Error(val message: Exception) : Result<Nothing>()
 }
 
 interface UserRepository {

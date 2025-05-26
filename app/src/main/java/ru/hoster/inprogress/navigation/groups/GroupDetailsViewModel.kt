@@ -16,10 +16,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 // --- UI-специфичные модели и Navigation Signal ---
-// Эти определения должны быть здесь или импортированы
-
-
-// --- UI-специфичные модели и Navigation Signal ---
 data class GroupDetailDisplay(
     val id: String,
     val name: String,
@@ -40,7 +36,7 @@ data class GroupDetailsScreenUiState(
     val members: List<MemberDisplay> = emptyList(),
     val isLoading: Boolean = false,
     val isCurrentUserAdmin: Boolean = false,
-    val currentUserId: String? = null, // <--- ДОБАВЛЕНО ПОЛЕ ДЛЯ ID ТЕКУЩЕГО ПОЛЬЗОВАТЕЛЯ
+    val currentUserId: String? = null,
     val error: String? = null,
     val showLeaveGroupDialog: Boolean = false,
     val leaveGroupInProgress: Boolean = false,
@@ -58,7 +54,7 @@ class GroupDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val groupRepository: GroupRepository,
     private val userRepository: UserRepository,
-    private val authService: AuthService // Остается private
+    private val authService: AuthService
 ) : ViewModel() {
 
     private val groupId: String = savedStateHandle.get<String>("groupId")!!
@@ -67,7 +63,6 @@ class GroupDetailsViewModel @Inject constructor(
     val uiState: StateFlow<GroupDetailsScreenUiState> = _uiState.asStateFlow()
 
     init {
-        // Устанавливаем currentUserId в UiState при инициализации
         val fetchedCurrentUserId = authService.getCurrentUserId()
         _uiState.update { it.copy(currentUserId = fetchedCurrentUserId) }
 
@@ -81,7 +76,7 @@ class GroupDetailsViewModel @Inject constructor(
     fun loadGroupDetails() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val currentUserIdFromState = _uiState.value.currentUserId // Используем ID из state
+            val currentUserIdFromState = _uiState.value.currentUserId
             if (currentUserIdFromState == null) {
                 _uiState.update { it.copy(isLoading = false, error = "User not authenticated (from state).") }
                 return@launch
@@ -96,7 +91,7 @@ class GroupDetailsViewModel @Inject constructor(
                     }
 
                     val groupDisplay = groupData.toGroupDetailDisplay()
-                    val isAdmin = groupData.adminUserId == currentUserIdFromState // Используем ID из state
+                    val isAdmin = groupData.adminUserId == currentUserIdFromState
 
                     if (groupData.memberUserIds.isNotEmpty()) {
                         val memberIdsToFetch = if (groupData.memberUserIds.size > 30) {
@@ -140,7 +135,8 @@ class GroupDetailsViewModel @Inject constructor(
                                         group = groupDisplay,
                                         isCurrentUserAdmin = isAdmin,
                                         isLoading = false,
-                                        error = "Failed to load members: ${membersResult.exception.message}"
+                                        // Corrected: Use .message.message
+                                        error = "Failed to load members: ${membersResult.message.message}"
                                     )
                                 }
                             }
@@ -157,7 +153,10 @@ class GroupDetailsViewModel @Inject constructor(
                     }
                 }
                 is Result.Error -> {
-                    _uiState.update { it.copy(isLoading = false, error = "Failed to load group: ${groupResult.exception.message}") }
+                    _uiState.update {
+                        // Corrected: Use .message.message
+                        it.copy(isLoading = false, error = "Failed to load group: ${groupResult.message.message}")
+                    }
                 }
             }
         }
@@ -193,7 +192,8 @@ class GroupDetailsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             leaveGroupInProgress = false,
-                            error = "Failed to leave group: ${result.exception.message}"
+                            // Corrected: Use .message.message
+                            error = "Failed to leave group: ${result.message.message}"
                         )
                     }
                 }

@@ -3,6 +3,8 @@ import ru.hoster.inprogress.domain.model.ActivityData
 import ru.hoster.inprogress.domain.model.ActivityRepository
 import ru.hoster.inprogress.domain.model.Result
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import ru.hoster.inprogress.data.ActivityItem
 import java.util.Date
 import java.util.UUID
 
@@ -43,18 +45,27 @@ class FakeActivityRepository : ActivityRepository {
         activities[activity.id] = activity
     }
 
-    override suspend fun getActivityById(activityId: String): Result<ActivityData?> {
-        delay(200) // Simulate network delay
-        val activity = activities[activityId]
-        return if (activity != null) {
-            Result.Success(activity)
-        } else {
-            // Result.Success(null) // To indicate activity not found but no system error
-            Result.Error(Exception("FakeActivityRepo: Activity with ID $activityId not found."))
-        }
+    override fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>> {
+        TODO("Not yet implemented")
     }
 
-    override suspend fun insertActivity(activity: ActivityData): Result<String> {
+    override suspend fun getActivityById(id: String): ActivityItem? {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun deleteActivity(id: String) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun updateActivity(activity: ActivityItem) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun addActivity(activityToSave: ActivityItem) {
+        TODO("Not yet implemented")
+    }
+
+    suspend fun insertActivity(activity: ActivityData): Result<String> {
         delay(400)
         val newId = activity.id.ifEmpty { UUID.randomUUID().toString() }
         val newLocalId = if(activity.localId == 0L) localIdCounter++ else activity.localId
@@ -63,7 +74,7 @@ class FakeActivityRepository : ActivityRepository {
         return Result.Success(newId)
     }
 
-    override suspend fun updateActivity(activity: ActivityData): Result<Unit> {
+     suspend fun updateActivity(activity: ActivityData): Result<Unit> {
         delay(400)
         if (!activities.containsKey(activity.id)) {
             return Result.Error(Exception("FakeActivityRepo: Activity with ID ${activity.id} not found for update."))

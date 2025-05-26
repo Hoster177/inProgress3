@@ -5,7 +5,9 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import ru.hoster.inprogress.data.repository.ActivityRepositoryImpl
 import ru.hoster.inprogress.data.repository.FirestoreUserRepository
+import ru.hoster.inprogress.domain.model.ActivityRepository
 import ru.hoster.inprogress.domain.model.UserRepository
 import javax.inject.Singleton
 
@@ -20,6 +22,9 @@ abstract class RepositoryModule { // Можно объединить с AuthModu
     ): UserRepository
 
 
-
-    // ... другие Binds для репозиториев (GroupRepository, ActivityRepository и т.д.)
+    @Binds
+    @Singleton
+    abstract fun bindActivityRepository(
+        activityRepositoryImpl: ActivityRepositoryImpl
+    ): ActivityRepository
 }

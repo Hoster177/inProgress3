@@ -56,9 +56,9 @@ object AppModule {
         return FirestoreGroupRepository(firestore) // Provide real implementation
     }
 
-    @Provides
-    @Singleton
-    fun provideActivityRepository(): ActivityRepository {
-        return FakeActivityRepository()
-    }
+//    @Provides
+//    @Singleton
+//    fun provideActivityRepository(): ActivityRepository {
+//        return FakeActivityRepository()
+//    }
 }

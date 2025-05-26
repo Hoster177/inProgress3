@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.hoster.inprogress.domain.model.AuthService
-import ru.hoster.inprogress.domain.model.Result // Ваш Result класс
+import ru.hoster.inprogress.domain.model.Result // Your Result class
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,9 +40,15 @@ class AuthViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        it.copy(isLoading = false, errorMessage = mapAuthException(result.exception))
+                        // Corrected: Use result.message as it's the property holding the Exception
+                        it.copy(isLoading = false, errorMessage = mapAuthException(result.message))
                     }
                 }
+                // Assuming Result.Loading is not part of your sealed class based on the definition provided.
+                // If it were, and it's an object:
+                // Result.Loading -> { /* Handle loading */ }
+                // If it were a class:
+                // is Result.Loading -> { /* Handle loading */ }
             }
         }
     }
@@ -50,41 +56,42 @@ class AuthViewModel @Inject constructor(
     fun signUp() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            // Здесь authService.signUp() уже должен вызывать userRepository.createUserProfile() внутри себя
             val result = authService.signUp(uiState.value.email, uiState.value.password)
             when (result) {
                 is Result.Success -> {
-                    // result.data содержит userId, если он нужен здесь
                     _uiState.update {
                         it.copy(isLoading = false, navigationEvent = AuthNavigationEvent.NavigateToMain)
                     }
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        it.copy(isLoading = false, errorMessage = mapAuthException(result.exception))
+                        // Corrected: Use result.message as it's the property holding the Exception
+                        it.copy(isLoading = false, errorMessage = mapAuthException(result.message))
                     }
                 }
+                // Assuming Result.Loading is not part of your sealed class.
             }
         }
     }
 
-    // Вызывается из UI после обработки навигационного события
     fun onNavigationEventConsumed() {
         _uiState.update { it.copy(navigationEvent = null) }
     }
 
-    // Вызывается из UI для сброса сообщения об ошибке, если нужно
     fun clearErrorMessage() {
         _uiState.update { it.copy(errorMessage = null) }
     }
 
     private fun mapAuthException(exception: Exception): String {
-        // Здесь можно добавить более специфичную обработку ошибок Firebase
-        // com.google.firebase.FirebaseNetworkException -> "Проверьте интернет-соединение"
-        // com.google.firebase.auth.FirebaseAuthWeakPasswordException -> "Пароль слишком слабый. Используйте не менее 6 символов."
-        // com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> "Неверный email или пароль."
-        // com.google.firebase.auth.FirebaseAuthUserCollisionException -> "Пользователь с таким email уже существует."
-        // com.google.firebase.auth.FirebaseAuthInvalidUserException -> "Пользователь с таким email не найден."
-        return exception.message ?: "Произошла неизвестная ошибка"
+        // Consider logging the full exception here for debugging, e.g., Log.w("AuthViewModel", "Auth error:", exception)
+        return when (exception) {
+            is com.google.firebase.FirebaseNetworkException -> "Проверьте интернет-соединение"
+            is com.google.firebase.auth.FirebaseAuthWeakPasswordException -> "Пароль слишком слабый. Используйте не менее 6 символов."
+            is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> "Неверный email или пароль."
+            is com.google.firebase.auth.FirebaseAuthUserCollisionException -> "Пользователь с таким email уже существует."
+            is com.google.firebase.auth.FirebaseAuthInvalidUserException -> "Пользователь с таким email не найден."
+            // You might want to add a case for java.net.UnknownHostException if FirebaseNetworkException doesn't cover it
+            else -> exception.message ?: "Произошла неизвестная ошибка"
+        }
     }
 }

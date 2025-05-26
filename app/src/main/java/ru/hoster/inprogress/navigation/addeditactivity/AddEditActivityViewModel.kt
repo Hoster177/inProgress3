@@ -1,21 +1,27 @@
 package ru.hoster.inprogress.navigation.addeditactivity
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ru.hoster.inprogress.domain.model.ActivityData
+// Removed ActivityData import as it's not used and ActivityItem is preferred
+// import ru.hoster.inprogress.domain.model.ActivityData
 import ru.hoster.inprogress.domain.model.ActivityRepository
 import ru.hoster.inprogress.domain.model.AuthService
-import ru.hoster.inprogress.domain.model.Result
+// Removed Result import as it's not directly used by this ViewModel's public API after previous changes
+// import ru.hoster.inprogress.domain.model.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.hoster.inprogress.data.ActivityItem // Your ActivityItem class
 import java.util.Date
 import javax.inject.Inject
 
-// UI State and Navigation Signal (can be in this file or a separate ui.model file)
+// Ensure predefinedColorsHex is accessible here (e.g., defined in this file or imported)
+
+
 data class AddEditActivityScreenUiState(
     val activityName: String = "",
     val selectedColorHex: String? = predefinedColorsHex.firstOrNull(),
@@ -24,13 +30,9 @@ data class AddEditActivityScreenUiState(
     val screenTitle: String = "Добавить занятие",
     val initialActivityLoaded: Boolean = false,
     val saveCompleted: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val loadedActivityItem: ActivityItem? = null
 )
-
-// Predefined colors list - ensure this is accessible.
-// It was previously in AddEditActivityScreen.kt.
-// For simplicity, I'll assume it's available here or you can move it to a common constants file.
-// val predefinedColorsHex = listOf("#FF6B6B", ...)
 
 @HiltViewModel
 class AddEditActivityViewModel @Inject constructor(
@@ -55,39 +57,38 @@ class AddEditActivityViewModel @Inject constructor(
         if (isEditingMode && activityId != null) {
             loadActivity(activityId)
         } else {
-            _uiState.update { it.copy(initialActivityLoaded = true) } // Ready for new entry
+            _uiState.update { it.copy(initialActivityLoaded = true, isLoading = false) }
         }
     }
 
     private fun loadActivity(id: String) {
-        if (_uiState.value.initialActivityLoaded && _uiState.value.isEditing) return // Avoid re-loading if already loaded for edit
+        if (_uiState.value.initialActivityLoaded && _uiState.value.activityName.isNotEmpty() && _uiState.value.isEditing) return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            when (val result = activityRepository.getActivityById(id)) {
-                is Result.Success -> {
-                    val activityData = result.data
-                    if (activityData != null) {
-                        _uiState.update {
-                            it.copy(
-                                activityName = activityData.name,
-                                selectedColorHex = activityData.colorHex ?: predefinedColorsHex.firstOrNull(),
-                                isLoading = false,
-                                initialActivityLoaded = true
-                            )
-                        }
-                    } else {
-                        _uiState.update { it.copy(isLoading = false, error = "Activity not found.", initialActivityLoaded = true) }
-                    }
-                }
-                is Result.Error -> {
+            try {
+                val activityItem: ActivityItem? = activityRepository.getActivityById(id)
+                if (activityItem != null) {
                     _uiState.update {
                         it.copy(
+                            activityName = activityItem.name,
+                            // Corrected line: Direct access, assuming ActivityItem has 'colorHex'
+                            selectedColorHex = activityItem.colorHex ?: predefinedColorsHex.firstOrNull(),
+                            loadedActivityItem = activityItem,
                             isLoading = false,
-                            error = "Failed to load activity: ${result.exception.message}",
                             initialActivityLoaded = true
                         )
                     }
+                } else {
+                    _uiState.update { it.copy(isLoading = false, error = "Activity not found.", initialActivityLoaded = true) }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Failed to load activity: ${e.message}",
+                        initialActivityLoaded = true
+                    )
                 }
             }
         }
@@ -117,48 +118,48 @@ class AddEditActivityViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            val activityToSave: ActivityData = if (_uiState.value.isEditing && activityId != null) {
-                // For update, fetch existing to preserve fields not directly edited on this screen
-                // This is a simplified update; a real one might be more complex
-                val existingActivity = (activityRepository.getActivityById(activityId) as? Result.Success)?.data
-                (existingActivity ?: ActivityData(id = activityId, userId = currentUserId)).copy(
-                    name = currentName,
-                    colorHex = _uiState.value.selectedColorHex
-                    // Preserve other fields like isActive, totalDurationMillisToday, lastStartTime, createdAt
-                )
-            } else {
-                ActivityData(
-                    // id will be generated by repo or backend if empty
-                    userId = currentUserId,
-                    name = currentName,
-                    colorHex = _uiState.value.selectedColorHex,
-                    createdAt = Date()
-                )
-            }
+            try {
+                val activityToSave: ActivityItem
+                if (_uiState.value.isEditing && activityId != null) {
+                    val existingItem = _uiState.value.loadedActivityItem
+                        ?: activityRepository.getActivityById(activityId)
 
-            val result: Result<*> = if (_uiState.value.isEditing) {
-                activityRepository.updateActivity(activityToSave)
-            } else {
-                activityRepository.insertActivity(activityToSave)
-            }
-
-            when (result) {
-                is Result.Success -> {
-                    _uiState.update { it.copy(isLoading = false, saveCompleted = true) }
-                }
-                is Result.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = "Failed to save activity: ${result.exception.message}"
-                        )
+                    if (existingItem == null) {
+                        _uiState.update { it.copy(isLoading = false, error = "Original activity not found for update.") }
+                        return@launch
                     }
+                    activityToSave = existingItem.copy(
+                        name = currentName,
+                        // Assuming ActivityItem has 'colorHex'. Update it if it exists.
+                        colorHex = _uiState.value.selectedColorHex ?: existingItem.colorHex
+                    )
+                    activityRepository.updateActivity(activityToSave)
+                } else {
+                    activityToSave = ActivityItem(
+                        firebaseId = null, // Will be set by backend or sync logic
+                        userId = currentUserId,
+                        name = currentName,
+                        createdAt = Date(),
+                        totalDurationMillisToday = 0L,
+                        isActive = false,
+                        // Assuming ActivityItem has 'colorHex'. Set it from UI state.
+                        colorHex = _uiState.value.selectedColorHex
+                    )
+                    activityRepository.addActivity(activityToSave)
+                }
+                _uiState.update { it.copy(isLoading = false, saveCompleted = true) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Failed to save activity: ${e.message}"
+                    )
                 }
             }
         }
     }
 
     fun onSaveCompletedHandled() {
-        _uiState.update { it.copy(saveCompleted = false) } // Reset signal
+        _uiState.update { it.copy(saveCompleted = false) }
     }
 }
