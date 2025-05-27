@@ -24,7 +24,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class ActiveTimerInfo(
-    val activityId: Long,
+    val activityId: Long, // Это локальный ID активности
     val startTime: Long, // Время начала в миллисекундах
     val currentDurationMillis: Long
 )
@@ -63,79 +63,87 @@ class TimerService @Inject constructor(
     }
 
 
-    suspend fun startTimer(activityId: Long, userId: String): TimerSession {
-        Log.i("TimerService_Debug", "Attempting to START timer. activityId_param: $activityId, userId_param: '$userId'")
-        if (activityId == 0L) { /* ... ошибка ... */ throw IllegalArgumentException("activityId is 0L") }
-        if (userId.isBlank()) { /* ... ошибка ... */ throw IllegalArgumentException("userId is blank") }
+    suspend fun startTimer(activityLocalId: Long, userId: String, activityFirebaseId: String): TimerSession {
+        Log.i("TimerService_Debug", "Attempting to START timer. activityLocalId: $activityLocalId, userId: '$userId', activityFirebaseId: '$activityFirebaseId'")
 
-        // Проверяем активную сессию именно для этой комбинации activityId и userId
-        val existingActiveSessionForThisActivity = timerSessionDao.getActiveSession(userId, activityId)
-        if (existingActiveSessionForThisActivity != null) {
-            Log.w("TimerService_Debug", "startTimer: Timer is ALREADY ACTIVE for this specific activityId $activityId, userId '$userId'. Session ID: ${existingActiveSessionForThisActivity.id}")
-            // Если мы хотим разрешить только один таймер на пользователя ВООБЩЕ, то логика была бы другой.
-            // Текущая логика разрешает несколько таймеров для пользователя, но не более одного на конкретную activityId.
-            // Если нужно остановить другие активные таймеры пользователя, это нужно сделать здесь.
-            // Для простоты, пока считаем, что для activityId/userId может быть только одна активная сессия.
-            // Если существующая активная сессия найдена, возможно, стоит просто вернуть ее и обновить UI таймер.
-            _activeLocalSessionInfo.value = Pair(existingActiveSessionForThisActivity.activityId, existingActiveSessionForThisActivity.startTime.time)
-            startUiUpdater() // Запускаем/перезапускаем UI таймер
-            return existingActiveSessionForThisActivity // Возвращаем существующую
+        if (activityLocalId == 0L) {
+            Log.e("TimerService_Debug", "CRITICAL_ERROR: activityLocalId is 0L.")
+            throw IllegalArgumentException("activityLocalId cannot be 0L")
+        }
+        if (userId.isBlank()) {
+            Log.e("TimerService_Debug", "CRITICAL_ERROR: userId is blank.")
+            throw IllegalArgumentException("userId cannot be blank")
+        }
+        if (activityFirebaseId.isBlank()) {
+            Log.e("TimerService_Debug", "CRITICAL_ERROR: activityFirebaseId is blank.")
+            throw IllegalArgumentException("activityFirebaseId cannot be blank for Firestore operations")
         }
 
+        val existingActiveSessionForThisActivity = timerSessionDao.getActiveSession(userId, activityLocalId)
+        if (existingActiveSessionForThisActivity != null) {
+            Log.w("TimerService_Debug", "startTimer: Timer is ALREADY ACTIVE for this specific activityLocalId $activityLocalId, userId '$userId'. Session ID: ${existingActiveSessionForThisActivity.id}")
+            _activeLocalSessionInfo.value = Pair(existingActiveSessionForThisActivity.activityId, existingActiveSessionForThisActivity.startTime.time)
+            startUiUpdater()
+            return existingActiveSessionForThisActivity
+        }
 
-        val newSession = TimerSession(activityId = activityId, userId = userId, startTime = Date(), endTime = null)
-        Log.d("TimerService_Debug", "startTimer: Creating new session object: ActivityID=$activityId, UserID='$userId', StartTime=${newSession.startTime}")
+        val newSession = TimerSession(
+            activityId = activityLocalId, // Локальный ID для связи в Room
+            userId = userId,
+            startTime = Date(),
+            endTime = null
+        )
+        Log.d("TimerService_Debug", "startTimer: Creating new session object: LocalActivityID=$activityLocalId, UserID='$userId', StartTime=${newSession.startTime}")
 
-        val generatedId = timerSessionDao.insertSession(newSession)
-        val createdSession = newSession.copy(id = generatedId)
-        Log.i("TimerService_Debug", "startTimer: New session INSERTED LOCALLY. LocalSessionID: $generatedId, ForActivityID: $activityId, UserID: '$userId'")
+        val generatedLocalSessionId = timerSessionDao.insertSession(newSession)
+        val createdSession = newSession.copy(id = generatedLocalSessionId)
+        Log.i("TimerService_Debug", "startTimer: New session INSERTED LOCALLY. LocalSessionID: $generatedLocalSessionId, ForLocalActivityID: $activityLocalId, UserID: '$userId'")
 
-        // Обновляем информацию для тикающего Flow
         _activeLocalSessionInfo.value = Pair(createdSession.activityId, createdSession.startTime.time)
-        startUiUpdater() // Запускаем UI таймер
+        startUiUpdater()
 
         firestoreScope.launch {
             try {
-                Log.d("TimerService_Firestore", "startTimer: Attempting to add session to Firestore. ActivityID_orig: $activityId, UserID_orig: '$userId', LocalSessionID: $generatedId")
-                firestoreSessionRepository.addSession(userId, createdSession)
-                Log.i("TimerService_Firestore", "startTimer: Session successfully added to Firestore for ActivityID $activityId, UserID '$userId'.")
+                Log.d("TimerService_Firestore", "startTimer: Attempting to add session to Firestore. ForFirebaseActivityID: '$activityFirebaseId', UserID_orig: '$userId'")
+                // Используем НОВУЮ сигнатуру addSession, передавая activityFirebaseId
+                firestoreSessionRepository.addSession(userId, activityFirebaseId, createdSession)
+                Log.i("TimerService_Firestore", "startTimer: Session successfully added to Firestore for FirebaseActivityID '$activityFirebaseId', UserID '$userId'.")
             } catch (e: Exception) {
-                Log.e("TimerService_Firestore", "startTimer: ERROR syncing new session to Firestore for ActivityID $activityId: ${e.message}", e)
+                Log.e("TimerService_Firestore", "startTimer: ERROR syncing new session to Firestore for FirebaseActivityID '$activityFirebaseId': ${e.message}", e)
             }
         }
         return createdSession
     }
 
-    suspend fun stopTimer(activityId: Long, userId: String): TimerSession? {
-        Log.i("TimerService_Debug", "Attempting to STOP timer. activityId_param: $activityId, userId_param: '$userId'")
-        val activeSession = timerSessionDao.getActiveSession(userId, activityId)
+    suspend fun stopTimer(activityLocalId: Long, userId: String, activityFirebaseId: String): TimerSession? {
+        Log.i("TimerService_Debug", "Attempting to STOP timer. activityLocalId: $activityLocalId, userId: '$userId', activityFirebaseId: '$activityFirebaseId'")
 
+        val activeSession = timerSessionDao.getActiveSession(userId, activityLocalId)
         if (activeSession != null) {
             val newEndTime = Date()
             val updatedSession = activeSession.copy(endTime = newEndTime)
             timerSessionDao.updateSession(updatedSession)
-            Log.i("TimerService_Debug", "stopTimer: Session UPDATED LOCALLY. LocalSessionID: ${updatedSession.id}, ForActivityID: $activityId, EndTime set to $newEndTime")
+            Log.i("TimerService_Debug", "stopTimer: Session UPDATED LOCALLY for LocalActivityID: $activityLocalId")
 
-            // Останавливаем тикающий Flow, если это была остановленная сессия
-            if (_activeLocalSessionInfo.value?.first == activityId) {
-                _activeLocalSessionInfo.value = null // Сбрасываем активную сессию
+            if (_activeLocalSessionInfo.value?.first == activityLocalId) {
+                _activeLocalSessionInfo.value = null
                 stopUiUpdater()
             }
 
             firestoreScope.launch {
                 try {
-                    Log.d("TimerService_Firestore", "stopTimer: Attempting to update session in Firestore. ActivityID_orig: $activityId, UserID_orig: '$userId', StartTime_orig: ${activeSession.startTime}")
-                    firestoreSessionRepository.updateSessionEndTime(userId, activityId, activeSession.startTime, newEndTime)
-                    Log.i("TimerService_Firestore", "stopTimer: Session successfully updated in Firestore for ActivityID $activityId, UserID '$userId'.")
+                    Log.d("TimerService_Firestore", "stopTimer: Attempting to update session in Firestore. ForFirebaseActivityID: '$activityFirebaseId', UserID: '$userId', SessionStartTime: ${activeSession.startTime}")
+                    // Используем НОВУЮ сигнатуру updateSessionEndTime
+                    firestoreSessionRepository.updateSessionEndTime(userId, activityFirebaseId, activeSession.startTime, newEndTime)
+                    Log.i("TimerService_Firestore", "stopTimer: Session successfully updated in Firestore for FirebaseActivityID '$activityFirebaseId'.")
                 } catch (e: Exception) {
-                    Log.e("TimerService_Firestore", "stopTimer: ERROR syncing session stop to Firestore for ActivityID $activityId: ${e.message}", e)
+                    Log.e("TimerService_Firestore", "stopTimer: ERROR syncing session stop to Firestore for FirebaseActivityID '$activityFirebaseId': ${e.message}", e)
                 }
             }
             return updatedSession
         } else {
-            Log.w("TimerService_Debug", "stopTimer: No active session found in DAO for activityId $activityId, userId '$userId'. Nothing to stop.")
-            // Если текущий UI таймер тикал для этой activityId, его тоже надо остановить
-            if (_activeLocalSessionInfo.value?.first == activityId) {
+            Log.w("TimerService_Debug", "stopTimer: No active session found in DAO for localActivityId $activityLocalId, userId '$userId'.")
+            if (_activeLocalSessionInfo.value?.first == activityLocalId) {
                 _activeLocalSessionInfo.value = null
                 stopUiUpdater()
             }
@@ -143,31 +151,22 @@ class TimerService @Inject constructor(
         }
     }
 
-    suspend fun getActiveTimerSession(activityId: Long, userId: String): TimerSession? {
-        Log.d("TimerService_Debug", "getActiveTimerSession called. activityId_param: $activityId, userId_param: '$userId'")
-        return timerSessionDao.getActiveSession(userId, activityId)
-    }
 
     // Вызывается при старте таймера
     private fun startUiUpdater() {
         stopUiUpdater() // Остановить предыдущий, если был
         tickerJob = serviceScope.launch {
-            _activeLocalSessionInfo.collect { sessionInfoPair -> // Собираем изменения из _activeLocalSessionInfo
+            _activeLocalSessionInfo.collect { sessionInfoPair ->
                 if (sessionInfoPair != null) {
-                    val (currentActivityId, startTimeMillis) = sessionInfoPair
-                    Log.d("TimerService_Ticker", "UI Updater started for activityId: $currentActivityId, startTime: $startTimeMillis")
-                    // Запускаем вложенный тикер только если есть активная сессия
-                    while (this.isActive && _activeLocalSessionInfo.value?.first == currentActivityId) { // Проверяем, что мы все еще тикаем для той же сессии
+                    val (currentLocalActivityId, startTimeMillis) = sessionInfoPair
+                    Log.d("TimerService_Ticker", "UI Updater started for localActivityId: $currentLocalActivityId, startTime: $startTimeMillis")
+                    while (this.isActive && _activeLocalSessionInfo.value?.first == currentLocalActivityId) {
                         val duration = System.currentTimeMillis() - startTimeMillis
-                        _activeTimerFlow.value = ActiveTimerInfo(currentActivityId, startTimeMillis, duration)
+                        _activeTimerFlow.value = ActiveTimerInfo(currentLocalActivityId, startTimeMillis, duration)
                         delay(1000)
                     }
-                    // Если цикл while завершился, а _activeLocalSessionInfo все еще указывает на эту сессию,
-                    // это значит, что-то пошло не так, или корутина была отменена снаружи.
-                    // Если _activeLocalSessionInfo изменился на другую сессию или null, collect перезапустит внешний цикл.
                 } else {
-                    // Нет активной сессии, сбрасываем _activeTimerFlow
-                    if (_activeTimerFlow.value != null) { // Эмитим null только если предыдущее значение не было null
+                    if (_activeTimerFlow.value != null) {
                         Log.d("TimerService_Ticker", "No active session info, clearing activeTimerFlow.")
                         _activeTimerFlow.value = null
                     }
@@ -177,14 +176,18 @@ class TimerService @Inject constructor(
         Log.d("TimerService_Ticker", "Main tickerJob launched.")
     }
 
-
     private fun stopUiUpdater() {
         tickerJob?.cancel()
         tickerJob = null
-        if (_activeTimerFlow.value != null) { // Если таймер тикал, эмитим null
+        if (_activeTimerFlow.value != null) {
             _activeTimerFlow.value = null
         }
         Log.d("TimerService_Ticker", "UI Updater (tickerJob) stopped.")
+    }
+
+    suspend fun getActiveTimerSession(activityLocalId: Long, userId: String): TimerSession? {
+        Log.d("TimerService_Debug", "getActiveTimerSession called. activityLocalId_param: $activityLocalId, userId_param: '$userId'")
+        return timerSessionDao.getActiveSession(userId, activityLocalId) // Используем локальный ID
     }
 
     // Остальные методы сервиса (getAllSessionsForUser и т.д.) остаются как есть

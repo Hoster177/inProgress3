@@ -67,8 +67,12 @@ data class MainScreenUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val currentlyTimingActivityId: Long? = null, // ID задачи, для которой тикает таймер
-    val currentlyTimingDurationFormatted: String? = null // Отформатированное время текущей сессии
-)
+    val currentlyTimingDurationFormatted: String? = null, // Отформатированное время текущей сессии
+    val currentlyTickingDurationMillis: Long = 0,
+    val currentlyTimingActivityStartTime: Long? = null
+) {
+
+}
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -84,84 +88,85 @@ class HomeViewModel @Inject constructor(
     private fun getCurrentUserId(): String? = authService.getCurrentUserId()
 
     init {
-        // Основные данные (список активностей, цели)
-        loadInitialData()
+        loadBaseData() // Переименовал для ясности
 
-        // Подписка на тикающий таймер из TimerService
         viewModelScope.launch {
             timerService.activeTimerFlow
-                //.distinctUntilChanged() // Реагировать только на реальные изменения
+                //.distinctUntilChanged()
                 .collect { activeTimerInfo: ActiveTimerInfo? ->
                     _uiState.update { currentState ->
                         if (activeTimerInfo != null) {
-                            Log.d("HomeVM_Ticker", "Received active timer info: ActID=${activeTimerInfo.activityId}, Duration=${activeTimerInfo.currentDurationMillis}")
-                            // Обновляем ActivityItemUi и общее время
-                            val updatedActivities = currentState.activities.map { activityUi ->
-                                if (activityUi.baseActivity.id == activeTimerInfo.activityId) {
-                                    // --- НАЧАЛО ВАЖНОЙ ЧАСТИ ---
-                                    // Вариант 1: displayDuration - это ТОЛЬКО текущая сессия.
-                                    // totalDurationMillisToday из baseActivity остается как есть (сумма всех завершенных + активная на момент загрузки из БД)
-                                    // activityUi.copy(
-                                    //    displayDurationMillis = activeTimerInfo.currentDurationMillis, // Показываем только тикающее время
-                                    //    displayDurationFormatted = formatDurationViewModel(activeTimerInfo.currentDurationMillis),
-                                    //    isCurrentlyActive = true
-                                    // )
-
-                                    // Вариант 2: displayDuration - это сумма ВСЕХ предыдущих сессий + текущая тикающая.
-                                    // Требует, чтобы baseActivity.totalDurationMillisToday НЕ включало текущую активную сессию,
-                                    // или чтобы у нас было поле вроде baseActivity.totalDurationOfCompletedSessions.
-                                    // Если ActivityRepositoryImpl.getActivitiesForTodayFlow() уже правильно вычисляет
-                                    // totalDurationMillisToday и isActive, то этот вариант самый правильный.
-                                    // Предположим, getActivitiesForTodayFlow уже дал нам ActivityItem, где totalDurationMillisToday - это сумма
-                                    // всех завершенных сессий, а isActive показывает, есть ли активная.
-                                    // Тогда мы просто добавляем к этому длительность текущей сессии.
-                                    // НО! Если getActivitiesForTodayFlow уже включает активную сессию (до System.currentTimeMillis на момент запроса),
-                                    // то простое сложение будет неверным.
-
-                                    // САМЫЙ НАДЕЖНЫЙ ВАРИАНТ ДЛЯ НАЧАЛА:
-                                    // 1. `ActivityRepositoryImpl.getActivitiesForTodayFlow()` вычисляет `totalDurationMillisToday`
-                                    //    как сумму ВСЕХ сессий (включая активную до `System.currentTimeMillis()` НА МОМЕНТ ЗАПРОСА К БД)
-                                    //    и правильно выставляет `isActive`.
-                                    // 2. В `HomeViewModel`, для АКТИВНОЙ задачи, мы ЗАМЕНЯЕМ ее `displayDurationMillis`
-                                    //    на `activeTimerInfo.currentDurationMillis`.
-                                    // 3. Общий `dailyTotalTimeFormatted` пересчитывается с учетом этой замены.
-                                    activityUi.copy(
-                                        displayDurationMillis = activeTimerInfo.currentDurationMillis, // Отображаем длительность ТЕКУЩЕЙ сессии
-                                        displayDurationFormatted = formatDurationViewModel(activeTimerInfo.currentDurationMillis),
-                                        isCurrentlyActive = true
-                                    )
-                                    // --- КОНЕЦ ВАЖНОЙ ЧАСТИ ---
-                                } else {
-                                    // Для неактивных задач, отображаем их полную сохраненную длительность
-                                    activityUi.copy(
-                                        displayDurationMillis = activityUi.baseActivity.totalDurationMillisToday,
-                                        displayDurationFormatted = formatDurationViewModel(activityUi.baseActivity.totalDurationMillisToday),
-                                        isCurrentlyActive = false
-                                    )
-                                }
-                            }
-                            // Пересчет общего времени за день
-                            val newDailyTotal = updatedActivities.sumOf { it.displayDurationMillis }
-
-
+                            Log.d("HomeVM_Ticker", "TimerService emitted: ActID=${activeTimerInfo.activityId}, Duration=${activeTimerInfo.currentDurationMillis}, StartTime=${activeTimerInfo.startTime}")
                             currentState.copy(
-                                activities = updatedActivities,
                                 currentlyTimingActivityId = activeTimerInfo.activityId,
-                                currentlyTimingDurationFormatted = formatDurationViewModel(activeTimerInfo.currentDurationMillis),
-                                dailyTotalTimeFormatted = formatDurationViewModel(newDailyTotal, forceHours = true) // Обновляем общее время
+                                currentlyTimingActivityStartTime = activeTimerInfo.startTime,
+                                currentlyTickingDurationMillis = activeTimerInfo.currentDurationMillis,
+                                activities = currentState.activities.map { actUi ->
+                                    actUi.copy(isCurrentlyActive = actUi.baseActivity.id == activeTimerInfo.activityId)
+                                }
+                                // dailyTotalTimeFormatted будет пересчитан ниже, если нужно
                             )
                         } else {
-                            // Нет активного таймера
-                            Log.d("HomeVM_Ticker", "Received null active timer info (timer stopped).")
+                            Log.d("HomeVM_Ticker", "TimerService emitted: No active timer.")
                             currentState.copy(
-                                activities = currentState.activities.map { it.copy(isCurrentlyActive = false) }, // Все неактивны
                                 currentlyTimingActivityId = null,
-                                currentlyTimingDurationFormatted = null
-                                // dailyTotalTimeFormatted остается от последнего значения из репозитория
+                                currentlyTimingActivityStartTime = null,
+                                currentlyTickingDurationMillis = 0L,
+                                activities = currentState.activities.map { actUi ->
+                                    actUi.copy(isCurrentlyActive = false)
+                                }
                             )
                         }
                     }
                 }
+        }
+
+        // Комбинированный Flow для обновления activitiesUi и dailyTotalTimeFormatted
+        // Он будет реагировать на изменения из репозитория И на изменения тикающего таймера
+        viewModelScope.launch {
+            combine(
+                activityRepository.getActivitiesForTodayFlow(), // Эмитит List<ActivityItem>
+                _uiState.map { it.currentlyTimingActivityId }.distinctUntilChanged(),
+                _uiState.map { it.currentlyTimingActivityStartTime }.distinctUntilChanged(),
+                _uiState.map { it.currentlyTickingDurationMillis }.distinctUntilChanged()
+            ) { activitiesFromRepo, timingActivityId, timingStartTime, tickingDuration ->
+
+                Log.d("HomeVM_UI_Updater", "UI Updater triggered. Repo activities: ${activitiesFromRepo.size}, TimingID: $timingActivityId, TickingDuration: $tickingDuration")
+
+                val activitiesUi = activitiesFromRepo.map { repoActivity ->
+                    var displayDuration = repoActivity.totalDurationMillisToday // Это сумма завершенных сессий из репо
+                    val isActiveNow = repoActivity.id == timingActivityId
+
+                    if (isActiveNow && timingStartTime != null) {
+                        // Убедимся, что startTime из repoActivity (если бы оно там было)
+                        // совпадает с timingStartTime. Но проще полагаться на timingStartTime.
+                        // Длительность текущей активной сессии уже есть в tickingDuration.
+                        displayDuration += tickingDuration
+                    }
+
+                    ActivityItemUi(
+                        baseActivity = repoActivity,
+                        displayDurationMillis = displayDuration,
+                        displayDurationFormatted = formatDurationViewModel(displayDuration),
+                        isCurrentlyActive = isActiveNow
+                    )
+                }
+
+                val dailyTotalMillis = activitiesUi.sumOf { it.displayDurationMillis }
+
+                _uiState.update { current ->
+                    current.copy(
+                        activities = activitiesUi,
+                        dailyTotalTimeFormatted = formatDurationViewModel(dailyTotalMillis, forceHours = true),
+                        isLoading = false, // Предполагаем, что загрузка завершена, если есть данные из репо
+                        errorMessage = null
+                    )
+                }
+
+            }.catch { throwable ->
+                Log.e("HomeVM_UI_Updater", "Error in UI Updater combine: ${throwable.message}", throwable)
+                _uiState.update { it.copy(isLoading = false, errorMessage = throwable.message) }
+            }.collect() // Просто collect, т.к. обновление идет через _uiState.update
         }
     }
 
@@ -224,86 +229,144 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private fun loadBaseData() { // Эта функция теперь может быть не нужна, если все в init
+        viewModelScope.launch {
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                _uiState.value = MainScreenUiState(isLoading = false, errorMessage = "User not logged in")
+                return@launch
+            }
+            // Просто "запускаем" поток из репозитория.
+            // combine в init его подхватит.
+            // activityRepository.getActivitiesForTodayFlow().launchIn(viewModelScope) // Не обязательно, если combine уже есть
+            // goalRepository.getActiveGoalsFlow().launchIn(viewModelScope) // Аналогично для целей
+
+            // Можно добавить загрузку целей отдельно, если они не зависят от тикающего таймера
+            goalRepository.getActiveGoalsFlow()
+                .onEach { goals -> _uiState.update { it.copy(goals = goals) } }
+                .catch { e -> _uiState.update { it.copy(errorMessage = e.message) } }
+                .launchIn(viewModelScope)
+        }
+    }
 
     fun onActivityTimerToggle(activityStringId: String) {
         viewModelScope.launch {
             val userId = getCurrentUserId()
-            if (userId == null) { /* ... */ return@launch }
+            if (userId == null) { /* ... обработка ... */ return@launch }
+
             val activity = activityRepository.getActivityById(activityStringId)
-            if (activity == null) { /* ... */ return@launch }
-
-            Log.i("HomeVM_Timer_Debug", "Toggling timer for UI ID: '$activityStringId'. Name='${activity.name}', LocalDB_ID=${activity.id}")
-            val activityLongId = activity.id
-
-            // Немедленное обновление UI для отзывчивости (isCurrentlyActive)
-            // Окончательное состояние придет от activeTimerFlow и/или репозитория
-            _uiState.update { current ->
-                current.copy(
-                    activities = current.activities.map {
-                        if (it.baseActivity.id == activityLongId) it.copy(isCurrentlyActive = !it.isCurrentlyActive) // Оптимистичное переключение
-                        else it
-                    }
-                )
+            if (activity == null) {
+                Log.e("HomeVM_Timer_Toggle", "Activity NOT FOUND for stringId: $activityStringId")
+                _uiState.update { it.copy(errorMessage = "Задача не найдена.") }
+                return@launch
+            }
+            if (activity.firebaseId.isNullOrBlank()){
+                Log.e("HomeVM_Timer_Toggle", "CRITICAL: FirebaseID is blank for activity '${activity.name}'. Cannot sync timer with Firestore.")
+                _uiState.update { it.copy(errorMessage = "ID задачи для облака отсутствует. Таймер будет только локальным.") }
+                // Можно решить, запускать ли таймер только локально или нет.
+                // Для простоты, если firebaseId нет, не будем вызывать методы сервиса, которые требуют его для Firestore.
+                // Или TimerService должен иметь версии методов без firebaseId для чисто локальной работы.
+                // Пока что прервем, если firebaseId нужен.
+                return@launch
             }
 
+            val activityLocalId = activity.id
+            val activityFirebaseId = activity.firebaseId // Уже проверили на isNullOrBlank
+
+            Log.i("HomeVM_Timer_Toggle", "Toggling timer for UI ID: '$activityStringId'. Name='${activity.name}', LocalDB_ID=$activityLocalId, FirebaseID='$activityFirebaseId'")
+
             try {
-                // Проверяем состояние через TimerService, а не локально в ViewModel
-                val activeTimerInfoCurrently = timerService.activeTimerFlow.value // Получаем текущее состояние таймера
-                val isCurrentlyRunningForThisActivity = activeTimerInfoCurrently?.activityId == activityLongId
+                val activeTimerInfoCurrently = timerService.activeTimerFlow.value
+                val isCurrentlyRunningForThisActivity = activeTimerInfoCurrently?.activityId == activityLocalId
 
                 if (isCurrentlyRunningForThisActivity) {
-                    Log.d("HomeVM_Timer_Debug", "TimerService indicates active for $activityLongId. Stopping.")
-                    timerService.stopTimer(activityLongId, userId)
+                    Log.d("HomeVM_Timer_Toggle", "TimerService indicates active for $activityLocalId. Stopping.")
+                    timerService.stopTimer(activityLocalId, userId, activityFirebaseId)
                 } else {
-                    // Если какой-то другой таймер активен, TimerService должен его остановить,
-                    // или ваша логика должна это учитывать (например, запрещать запуск нового).
-                    // Предположим, TimerService.startTimer корректно обработает это (например, остановит предыдущий).
-                    Log.d("HomeVM_Timer_Debug", "TimerService indicates NOT active for $activityLongId or active for another. Starting.")
-                    timerService.startTimer(activityLongId, userId)
+                    Log.d("HomeVM_Timer_Toggle", "TimerService indicates NOT active for $activityLocalId or active for another. Starting.")
+                    timerService.startTimer(activityLocalId, userId, activityFirebaseId)
                 }
             } catch (e: Exception) {
-                Log.e("HomeVM_Timer_Debug", "Error toggling timer for LocalDB_ID $activityLongId: ${e.message}", e)
-                _uiState.update { it.copy(errorMessage = e.localizedMessage ?: "Timer toggle error") }
+                Log.e("HomeVM_Timer_Toggle", "Error toggling timer for LocalDB_ID $activityLocalId: ${e.message}", e)
+                _uiState.update { it.copy(errorMessage = e.localizedMessage ?: "Ошибка переключения таймера") }
             }
         }
     }
 
-    fun onDeleteActivityClick(activityStringId: String) {
+    fun onDeleteActivityClick(activityStringId: String) { // activityStringId может быть firebaseId или строковым представлением localId
         viewModelScope.launch {
             val userId = getCurrentUserId()
             if (userId == null) {
-                Log.e("HomeVM", "Cannot delete activity: User ID is null.")
+                Log.e("HomeVM_Delete", "Cannot delete activity: User ID is null.")
+                _uiState.update { it.copy(errorMessage = "Пользователь не авторизован.") }
                 return@launch
             }
 
             val activity = activityRepository.getActivityById(activityStringId)
-            // Важно: используем activity.id (Long) для TimerService
-            val activityLongId = activity?.id
-
-            if (activityLongId != null) {
-                try {
-                    val activeSession = timerService.getActiveTimerSession(activityLongId, userId)
-                    if (activeSession != null) {
-                        Log.d("HomeVM", "Stopping active timer for activity $activityLongId before deletion.")
-                        timerService.stopTimer(activityLongId, userId)
-                    }
-                } catch (e: Exception) {
-                    Log.e("HomeVM", "Error stopping timer for activity $activityLongId during deletion: ${e.message}", e)
-                    // Продолжаем удаление задачи, даже если остановка таймера не удалась
-                }
-            } else {
-                Log.w("HomeVM", "Could not get Long ID for activity $activityStringId to check active session before deletion.")
+            if (activity == null) {
+                Log.w("HomeVM_Delete", "Activity with ID/FirebaseID '$activityStringId' not found for deletion.")
+                _uiState.update { it.copy(errorMessage = "Задача для удаления не найдена.") }
+                return@launch
             }
 
-            // Удаляем задачу из репозитория по ее строковому ID
+            val activityLocalId = activity.id
+            val activityFirebaseId = activity.firebaseId // Получаем Firebase ID
+
+            // Сначала останавливаем таймер, если он активен для этой задачи
+            if (activityFirebaseId.isNullOrBlank()) {
+                Log.w("HomeVM_Delete", "FirebaseID is blank for activity '${activity.name}' (LocalID: $activityLocalId). " +
+                        "Cannot guarantee stopping timer in Firestore, but will attempt local stop.")
+                // Если firebaseId нет, мы все равно можем попытаться остановить локальный таймер,
+                // но синхронизация с Firestore для остановки сессии не произойдет.
+                // В этом случае stopTimer вызовет ошибку, если он строго требует firebaseId.
+                // Либо TimerService.stopTimer должен уметь обрабатывать опциональный firebaseId.
+                // Для текущей реализации TimerService, где firebaseId обязателен для Firestore,
+                // мы должны либо прервать, либо передать фиктивное значение, что плохо.
+                // Лучше, если stopTimer сможет работать только с localId, если firebaseId отсутствует,
+                // и тогда он просто не будет синхронизировать остановку с Firestore.
+
+                // Пока предположим, что если firebaseId нет, то и сессий в Firestore для него нет.
+                // Попытаемся остановить только локально, если TimerService это позволяет.
+                // Однако, текущая сигнатура stopTimer требует firebaseId.
+                // Это означает, что если у задачи нет firebaseId, мы не сможем корректно вызвать stopTimer.
+            }
+
             try {
-                activityRepository.deleteActivity(activityStringId)
-                Log.d("HomeVM", "Activity $activityStringId deleted.")
+                // Проверяем активную сессию через TimerService, используя локальный ID
+                val activeTimerInfoCurrently = timerService.activeTimerFlow.value
+                val isTimerRunningForThisActivity = activeTimerInfoCurrently?.activityId == activityLocalId
+
+                if (isTimerRunningForThisActivity) {
+                    Log.d("HomeVM_Delete", "Timer is active for activity (LocalID: $activityLocalId, FirebaseID: '$activityFirebaseId'). Stopping it before deletion.")
+                    if (!activityFirebaseId.isNullOrBlank()) {
+                        timerService.stopTimer(activityLocalId, userId, activityFirebaseId)
+                    } else {
+                        // Если firebaseId нет, как мы должны остановить таймер в Firestore? Никак.
+                        // Возможно, TimerService должен иметь версию stopTimer только с localId для локальной остановки.
+                        // Или мы просто не останавливаем его в Firestore.
+                        // Для простоты, если firebaseId нет, мы можем пропустить вызов stopTimer,
+                        // или stopTimer должен быть достаточно умным.
+                        // Пока что, если firebaseId нет, этот блок не будет выполнен для stopTimer.
+                        Log.w("HomeVM_Delete", "Cannot stop timer in Firestore for LocalID $activityLocalId as FirebaseID is missing.")
+                        // Можно попытаться остановить UI-таймер напрямую, если TimerService это позволяет без firebaseId
+                        // timerService.forceStopLocalUiUpdaterFor(activityLocalId) // Гипотетический метод
+                    }
+                }
             } catch (e: Exception) {
-                Log.e("HomeVM", "Error deleting activity $activityStringId: ${e.message}", e)
-                _uiState.update { it.copy(errorMessage = "Could not delete activity.") }
+                Log.e("HomeVM_Delete", "Error stopping timer for activity (LocalID: $activityLocalId) during deletion: ${e.message}", e)
+                // Продолжаем удаление задачи, даже если остановка таймера не удалась
             }
-            // UI обновится автоматически через Flow от activityRepository
+
+            // Удаляем задачу из репозитория
+            try {
+                activityRepository.deleteActivity(activityStringId) // Используем исходный activityStringId
+                Log.i("HomeVM_Delete", "Activity (criteria: '$activityStringId', resolved LocalID: $activityLocalId, resolved FirebaseID: '$activityFirebaseId') request sent for deletion.")
+                _uiState.update { it.copy(errorMessage = null) } // Очищаем предыдущие ошибки
+            } catch (e: Exception) {
+                Log.e("HomeVM_Delete", "Error deleting activity (criteria: '$activityStringId'): ${e.message}", e)
+                _uiState.update { it.copy(errorMessage = "Не удалось удалить задачу.") }
+            }
+            // UI обновится автоматически через Flow от activityRepository, когда данные изменятся в Room.
         }
     }
 
