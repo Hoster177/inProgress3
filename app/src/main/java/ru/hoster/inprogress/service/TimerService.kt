@@ -1,219 +1,202 @@
 package ru.hoster.inprogress.service
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.content.Context
-import android.content.Intent
-import android.os.Binder
-import android.os.Build
-import android.os.IBinder
-import android.util.Log
-import androidx.core.app.NotificationCompat
-import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.*
-import ru.hoster.inprogress.MainActivity
-import ru.hoster.inprogress.R
-import ru.hoster.inprogress.data.ActivityItem
-import ru.hoster.inprogress.domain.model.ActivityRepository
+import android.util.Log // Добавьте импорт логов
+import ru.hoster.inprogress.data.TimerSession
+import ru.hoster.inprogress.data.local.TimerSessionDao
+import ru.hoster.inprogress.data.repository.FirestoreSessionRepository
+import java.util.Date
 import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest // Для переключения таймера
+import kotlinx.coroutines.flow.flow // Для создания тикающего Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
-@AndroidEntryPoint
-class TimerService : Service() {
+data class ActiveTimerInfo(
+    val activityId: Long,
+    val startTime: Long, // Время начала в миллисекундах
+    val currentDurationMillis: Long
+)
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var timerJob: Job? = null
+@Singleton
+class TimerService @Inject constructor(
+    private val timerSessionDao: TimerSessionDao,
+    private val firestoreSessionRepository: FirestoreSessionRepository
+) {
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob()) // Используем SupervisorJob
+    private val firestoreScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // текущий ID задачи (firebaseId или локальный id-toString)
-    private var currentTaskId: String? = null
-    // время старта этого запуска
-    private var taskStartTimeMillis: Long = 0L
-    // уже накопленное до этого время
-    private var accumulatedTimeMillis: Long = 0L
+    // Хранит ID текущей активной сессии в локальной БД (не TimerSession.id, а activityId)
+    // и время ее старта.
+    private val _activeLocalSessionInfo = MutableStateFlow<Pair<Long, Long>?>(null) // Pair<activityId, startTimeMillis>
 
-    @Inject lateinit var activityRepository: ActivityRepository
+    private var tickerJob: Job? = null
 
-    companion object {
-        const val ACTION_START_TIMER = "ACTION_START_TIMER"
-        const val ACTION_STOP_TIMER  = "ACTION_STOP_TIMER"
-        const val EXTRA_TASK_ID      = "EXTRA_TASK_ID"
-        const val EXTRA_TASK_NAME    = "EXTRA_TASK_NAME"
-        const val EXTRA_ACCUMULATED_TIME = "EXTRA_ACCUMULATED_TIME"
+    // Flow, который эмитит информацию о текущем активном таймере (или null)
+    private val _activeTimerFlow = MutableStateFlow<ActiveTimerInfo?>(null)
+    val activeTimerFlow: StateFlow<ActiveTimerInfo?> = _activeTimerFlow.asStateFlow()
 
-        private const val NOTIF_CHANNEL_ID = "TimerServiceChannel"
-        private const val NOTIF_ID = 1
-        private const val TAG = "TimerService"
+
+    // При инициализации сервиса, проверим, нет ли уже активной сессии в БД
+    // Это важно, если сервис был убит и перезапущен, а таймер шел
+    init {
+        serviceScope.launch {
+            // Нужен способ получить userId при старте сервиса.
+            // Это ограничение, если TimerService не имеет прямого доступа к AuthService.
+            // Пока оставим это TODO или предположим, что userId передается при каждом вызове.
+            // Для простоты, сейчас эта логика не будет восстанавливать таймер при перезапуске сервиса,
+            // а будет полагаться на явные вызовы start/stop.
+            // Если нужно восстановление, то при старте сервиса нужно будет для текущего userId
+            // найти активную сессию в DAO и запустить _activeLocalSessionInfo.value = Pair(it.activityId, it.startTime.time)
+        }
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        Log.d(TAG, "onCreate")
-        createNotificationChannel()
+
+    suspend fun startTimer(activityId: Long, userId: String): TimerSession {
+        Log.i("TimerService_Debug", "Attempting to START timer. activityId_param: $activityId, userId_param: '$userId'")
+        if (activityId == 0L) { /* ... ошибка ... */ throw IllegalArgumentException("activityId is 0L") }
+        if (userId.isBlank()) { /* ... ошибка ... */ throw IllegalArgumentException("userId is blank") }
+
+        // Проверяем активную сессию именно для этой комбинации activityId и userId
+        val existingActiveSessionForThisActivity = timerSessionDao.getActiveSession(userId, activityId)
+        if (existingActiveSessionForThisActivity != null) {
+            Log.w("TimerService_Debug", "startTimer: Timer is ALREADY ACTIVE for this specific activityId $activityId, userId '$userId'. Session ID: ${existingActiveSessionForThisActivity.id}")
+            // Если мы хотим разрешить только один таймер на пользователя ВООБЩЕ, то логика была бы другой.
+            // Текущая логика разрешает несколько таймеров для пользователя, но не более одного на конкретную activityId.
+            // Если нужно остановить другие активные таймеры пользователя, это нужно сделать здесь.
+            // Для простоты, пока считаем, что для activityId/userId может быть только одна активная сессия.
+            // Если существующая активная сессия найдена, возможно, стоит просто вернуть ее и обновить UI таймер.
+            _activeLocalSessionInfo.value = Pair(existingActiveSessionForThisActivity.activityId, existingActiveSessionForThisActivity.startTime.time)
+            startUiUpdater() // Запускаем/перезапускаем UI таймер
+            return existingActiveSessionForThisActivity // Возвращаем существующую
+        }
+
+
+        val newSession = TimerSession(activityId = activityId, userId = userId, startTime = Date(), endTime = null)
+        Log.d("TimerService_Debug", "startTimer: Creating new session object: ActivityID=$activityId, UserID='$userId', StartTime=${newSession.startTime}")
+
+        val generatedId = timerSessionDao.insertSession(newSession)
+        val createdSession = newSession.copy(id = generatedId)
+        Log.i("TimerService_Debug", "startTimer: New session INSERTED LOCALLY. LocalSessionID: $generatedId, ForActivityID: $activityId, UserID: '$userId'")
+
+        // Обновляем информацию для тикающего Flow
+        _activeLocalSessionInfo.value = Pair(createdSession.activityId, createdSession.startTime.time)
+        startUiUpdater() // Запускаем UI таймер
+
+        firestoreScope.launch {
+            try {
+                Log.d("TimerService_Firestore", "startTimer: Attempting to add session to Firestore. ActivityID_orig: $activityId, UserID_orig: '$userId', LocalSessionID: $generatedId")
+                firestoreSessionRepository.addSession(userId, createdSession)
+                Log.i("TimerService_Firestore", "startTimer: Session successfully added to Firestore for ActivityID $activityId, UserID '$userId'.")
+            } catch (e: Exception) {
+                Log.e("TimerService_Firestore", "startTimer: ERROR syncing new session to Firestore for ActivityID $activityId: ${e.message}", e)
+            }
+        }
+        return createdSession
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand action=${intent?.action}")
-        intent ?: return START_NOT_STICKY
+    suspend fun stopTimer(activityId: Long, userId: String): TimerSession? {
+        Log.i("TimerService_Debug", "Attempting to STOP timer. activityId_param: $activityId, userId_param: '$userId'")
+        val activeSession = timerSessionDao.getActiveSession(userId, activityId)
 
-        when (intent.action) {
-            ACTION_START_TIMER -> {
-                val taskId   = intent.getStringExtra(EXTRA_TASK_ID)
-                val taskName = intent.getStringExtra(EXTRA_TASK_NAME) ?: "Активная задача"
-                val prevAccum = intent.getLongExtra(EXTRA_ACCUMULATED_TIME, 0L)
+        if (activeSession != null) {
+            val newEndTime = Date()
+            val updatedSession = activeSession.copy(endTime = newEndTime)
+            timerSessionDao.updateSession(updatedSession)
+            Log.i("TimerService_Debug", "stopTimer: Session UPDATED LOCALLY. LocalSessionID: ${updatedSession.id}, ForActivityID: $activityId, EndTime set to $newEndTime")
 
-                if (taskId == null) {
-                    Log.w(TAG, "No taskId passed to START_TIMER")
-                    stopSelf()
+            // Останавливаем тикающий Flow, если это была остановленная сессия
+            if (_activeLocalSessionInfo.value?.first == activityId) {
+                _activeLocalSessionInfo.value = null // Сбрасываем активную сессию
+                stopUiUpdater()
+            }
+
+            firestoreScope.launch {
+                try {
+                    Log.d("TimerService_Firestore", "stopTimer: Attempting to update session in Firestore. ActivityID_orig: $activityId, UserID_orig: '$userId', StartTime_orig: ${activeSession.startTime}")
+                    firestoreSessionRepository.updateSessionEndTime(userId, activityId, activeSession.startTime, newEndTime)
+                    Log.i("TimerService_Firestore", "stopTimer: Session successfully updated in Firestore for ActivityID $activityId, UserID '$userId'.")
+                } catch (e: Exception) {
+                    Log.e("TimerService_Firestore", "stopTimer: ERROR syncing session stop to Firestore for ActivityID $activityId: ${e.message}", e)
+                }
+            }
+            return updatedSession
+        } else {
+            Log.w("TimerService_Debug", "stopTimer: No active session found in DAO for activityId $activityId, userId '$userId'. Nothing to stop.")
+            // Если текущий UI таймер тикал для этой activityId, его тоже надо остановить
+            if (_activeLocalSessionInfo.value?.first == activityId) {
+                _activeLocalSessionInfo.value = null
+                stopUiUpdater()
+            }
+            return null
+        }
+    }
+
+    suspend fun getActiveTimerSession(activityId: Long, userId: String): TimerSession? {
+        Log.d("TimerService_Debug", "getActiveTimerSession called. activityId_param: $activityId, userId_param: '$userId'")
+        return timerSessionDao.getActiveSession(userId, activityId)
+    }
+
+    // Вызывается при старте таймера
+    private fun startUiUpdater() {
+        stopUiUpdater() // Остановить предыдущий, если был
+        tickerJob = serviceScope.launch {
+            _activeLocalSessionInfo.collect { sessionInfoPair -> // Собираем изменения из _activeLocalSessionInfo
+                if (sessionInfoPair != null) {
+                    val (currentActivityId, startTimeMillis) = sessionInfoPair
+                    Log.d("TimerService_Ticker", "UI Updater started for activityId: $currentActivityId, startTime: $startTimeMillis")
+                    // Запускаем вложенный тикер только если есть активная сессия
+                    while (this.isActive && _activeLocalSessionInfo.value?.first == currentActivityId) { // Проверяем, что мы все еще тикаем для той же сессии
+                        val duration = System.currentTimeMillis() - startTimeMillis
+                        _activeTimerFlow.value = ActiveTimerInfo(currentActivityId, startTimeMillis, duration)
+                        delay(1000)
+                    }
+                    // Если цикл while завершился, а _activeLocalSessionInfo все еще указывает на эту сессию,
+                    // это значит, что-то пошло не так, или корутина была отменена снаружи.
+                    // Если _activeLocalSessionInfo изменился на другую сессию или null, collect перезапустит внешний цикл.
                 } else {
-                    // если уже идёт таймер по другой задаче — остановим его
-                    if (timerJob?.isActive == true && currentTaskId != taskId) {
-                        stopTimerTracking()
-                    }
-                    // если по этой же задаче уже запущен — обновим уведомление
-                    if (timerJob?.isActive == true && currentTaskId == taskId) {
-                        startForeground(NOTIF_ID, createNotification(taskName, accumulatedTimeMillis + (System.currentTimeMillis() - taskStartTimeMillis)))
-                        return START_STICKY
-                    }
-
-                    currentTaskId = taskId
-                    accumulatedTimeMillis = prevAccum
-                    taskStartTimeMillis = System.currentTimeMillis()
-                    startTimerTracking(taskName)
-                    Log.d(TAG, "Timer START for $taskId ('$taskName') prevAccum=$prevAccum")
-                }
-            }
-
-            ACTION_STOP_TIMER -> {
-                val stopId = intent.getStringExtra(EXTRA_TASK_ID)
-                if (stopId == null || stopId == currentTaskId) {
-                    Log.d(TAG, "Received STOP_TIMER for $stopId (current=$currentTaskId)")
-                    stopTimerTracking()
-                    stopSelf()
-                } else {
-                    Log.d(TAG, "Ignoring STOP_TIMER for $stopId, current=$currentTaskId")
-                }
-            }
-        }
-
-        return START_STICKY
-    }
-
-    private fun startTimerTracking(taskName: String) {
-        timerJob?.cancel()
-        timerJob = serviceScope.launch {
-            startForeground(NOTIF_ID, createNotification(taskName, accumulatedTimeMillis))
-            while (isActive) {
-                delay(1000)
-                val elapsed = System.currentTimeMillis() - taskStartTimeMillis
-                val total   = accumulatedTimeMillis + elapsed
-
-                // Обновляем уведомление
-                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                    .notify(NOTIF_ID, createNotification(taskName, total))
-
-                // Сохраняем в БД
-                currentTaskId?.let { id ->
-                    // Получаем текущий объект
-                    val item: ActivityItem? = activityRepository.getActivityById(id)
-                    if (item != null) {
-                        val updated = item.copy(
-                            totalDurationMillisToday = total,
-                            isActive = true
-                        )
-                        activityRepository.updateActivity(updated)
-                        Log.d(TAG, "Saved time=$total for task '$id'")
+                    // Нет активной сессии, сбрасываем _activeTimerFlow
+                    if (_activeTimerFlow.value != null) { // Эмитим null только если предыдущее значение не было null
+                        Log.d("TimerService_Ticker", "No active session info, clearing activeTimerFlow.")
+                        _activeTimerFlow.value = null
                     }
                 }
             }
         }
+        Log.d("TimerService_Ticker", "Main tickerJob launched.")
     }
 
-    private fun stopTimerTracking() {
-        timerJob?.cancel()
-        timerJob = null
 
-        // финальное сохранение
-        currentTaskId?.let { id ->
-            val finalTime = accumulatedTimeMillis + (if (taskStartTimeMillis > 0) System.currentTimeMillis() - taskStartTimeMillis else 0L)
-            val item: ActivityItem? = runBlocking { activityRepository.getActivityById(id) }
-            if (item != null) {
-                val updated = item.copy(
-                    totalDurationMillisToday = finalTime,
-                    isActive = false
-                )
-                runBlocking { activityRepository.updateActivity(updated) }
-                Log.d(TAG, "Final save time=$finalTime for task '$id'")
-            }
+    private fun stopUiUpdater() {
+        tickerJob?.cancel()
+        tickerJob = null
+        if (_activeTimerFlow.value != null) { // Если таймер тикал, эмитим null
+            _activeTimerFlow.value = null
         }
-
-        currentTaskId = null
-        taskStartTimeMillis = 0L
-        accumulatedTimeMillis = 0L
-        stopForeground(true)
+        Log.d("TimerService_Ticker", "UI Updater (tickerJob) stopped.")
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIF_CHANNEL_ID,
-                "Таймер задач",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            (getSystemService(NotificationManager::class.java))
-                .createNotificationChannel(channel)
-        }
+    // Остальные методы сервиса (getAllSessionsForUser и т.д.) остаются как есть
+    fun getAllSessionsForUser(userId: String): Flow<List<TimerSession>> {
+        return timerSessionDao.getAllSessionsFlow(userId)
     }
 
-    private fun createNotification(taskName: String, elapsedMillis: Long): Notification {
-        val fmt = formatDuration(elapsedMillis)
-        val openAppIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val piOpen = PendingIntent.getActivity(
-            this, 0, openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val stopIntent = Intent(this, TimerService::class.java).apply {
-            action = ACTION_STOP_TIMER
-            putExtra(EXTRA_TASK_ID, currentTaskId)
-        }
-        val piStop = PendingIntent.getService(
-            this, 1, stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
-            .setContentTitle("Таймер: $taskName")
-            .setContentText("Прошло: $fmt")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)        // замените на вашу иконку
-            .setContentIntent(piOpen)
-            .addAction(R.drawable.ic_stop, "Стоп", piStop)
-            .setOnlyAlertOnce(true)
-            .setOngoing(true)
-            .build()
+    fun getSessionsForUserInDateRange(userId: String, from: Date, to: Date): Flow<List<TimerSession>> {
+        return timerSessionDao.getSessionsForDateRangeFlow(userId, from, to)
     }
 
-    private fun formatDuration(millis: Long): String {
-        val s = (millis / 1000) % 60
-        val m = (millis / (1000 * 60)) % 60
-        val h = (millis / (1000 * 60 * 60))
-        return String.format("%02d:%02d:%02d", h, m, s)
+    fun getAllSessionsForActivity(userId: String, activityId: Long): Flow<List<TimerSession>> {
+        return timerSessionDao.getSessionsForActivityFlow(userId, activityId)
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d(TAG, "onDestroy")
-        serviceScope.cancel()
-        stopTimerTracking()
-    }
-
-    // если не нужен биндинг — можно вернуть null
-    private val binder = LocalBinder()
-    inner class LocalBinder : Binder() {
-        fun getService(): TimerService = this@TimerService
-    }
-    override fun onBind(intent: Intent): IBinder? = binder
 }

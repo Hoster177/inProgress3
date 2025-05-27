@@ -1,6 +1,7 @@
 package ru.hoster.inprogress.domain.model
 import kotlinx.coroutines.flow.Flow
 import ru.hoster.inprogress.data.ActivityItem
+import ru.hoster.inprogress.data.TimerSession
 import java.util.Date
 
 // Represents your actual ActivityItem data model from Firebase/Room
@@ -23,6 +24,10 @@ interface ActivityRepository {
     suspend fun deleteActivity(id: String)
     suspend fun updateActivity(activity: ActivityItem) // Для обновления isActive и т.д.
     suspend fun addActivity(activity: ActivityItem)
+
+    suspend fun startSession(activityId: Long)
+    suspend fun stopSession(activityId: Long)
+    fun getSessionsForDateRange(uid: String, from: Date, to: Date): Flow<List<TimerSession>>
 
 
 }

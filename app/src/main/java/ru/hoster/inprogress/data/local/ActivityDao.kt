@@ -2,83 +2,48 @@ package ru.hoster.inprogress.data.local
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
-import ru.hoster.inprogress.data.ActivityItem // Убедись, что импорт правильный
+import ru.hoster.inprogress.data.ActivityItem
 
 @Dao
 interface ActivityDao {
 
+    // Main insert method. On conflict with PRIMARY KEY (id), it replaces.
+    // UNIQUE constraint on firebaseId is handled by repository logic before calling this.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrReplaceActivity(activity: ActivityItem): Long // Возвращает rowId или id
+    suspend fun insertActivity(activity: ActivityItem): Long // Returns new rowId or existing id if replaced
 
     @Update
-    suspend fun updateActivity(activity: ActivityItem)
+    suspend fun updateActivity(activity: ActivityItem) // Updates based on Primary Key 'id'
 
     @Delete
-    suspend fun deleteActivity(activity: ActivityItem)
+    suspend fun deleteActivity(activity: ActivityItem) // Deletes based on Primary Key 'id'
 
-    @Query("DELETE FROM activity_items WHERE id = :activityId")
-    suspend fun deleteActivityById(activityId: Long)
-
-    @Query("DELETE FROM activity_items WHERE firebaseId = :firebaseId")
-    suspend fun deleteActivityByFirebaseId(firebaseId: String)
-
-    @Query("SELECT * FROM activity_items WHERE id = :activityId")
-    suspend fun getActivityById(activityId: Long): ActivityItem?
-
-    @Query("SELECT * FROM activity_items WHERE firebaseId = :firebaseId")
-    suspend fun getActivityByFirebaseId(firebaseId: String): ActivityItem?
-
-    /**
-     * Получает поток активностей, созданных или актуальных для указанного диапазона дат (например, за один день).
-     * Предполагается, что поле 'createdAt' используется для определения "сегодняшних" задач,
-     * или это поле отражает дату, к которой задача привязана.
-     *
-     * @param startOfDayMillis Начало дня в миллисекундах (UTC).
-     * @param endOfDayMillis Конец дня в миллисекундах (UTC) (не включая эту миллисекунду).
-     */
-    @Query("SELECT * FROM activity_items WHERE userId = :userId AND createdAt >= :startOfDayMillis AND createdAt < :endOfDayMillis ORDER BY createdAt DESC")
-    fun getActivitiesForUserAndDateRangeFlow(userId: String, startOfDayMillis: Long, endOfDayMillis: Long): Flow<List<ActivityItem>>
-
-    // Если нужен просто поток всех активностей для пользователя (для отладки или других экранов)
-    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC")
-    fun getAllActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
-
-    // Более специфичные методы обновления, если полная операция updateActivity нежелательна
-    // Могут быть полезны для TimerService, чтобы избежать гонки состояний при обновлении только времени
-
-    @Query("UPDATE activity_items SET totalDurationMillisToday = :durationMillis WHERE id = :activityId")
-    suspend fun updateDurationForActivity(activityId: Long, durationMillis: Long)
-
-    @Query("UPDATE activity_items SET totalDurationMillisToday = :durationMillis WHERE firebaseId = :firebaseId")
-    suspend fun updateDurationForActivityByFirebaseId(firebaseId: String, durationMillis: Long)
-
-    @Query("UPDATE activity_items SET isActive = :isActive WHERE id = :activityId")
-    suspend fun updateActiveStateForActivity(activityId: Long, isActive: Boolean)
-
-    @Query("UPDATE activity_items SET isActive = :isActive WHERE firebaseId = :firebaseId")
-    suspend fun updateActiveStateForActivityByFirebaseId(firebaseId: String, isActive: Boolean)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE) // OnConflict можно выбрать другой, если нужно
-    suspend fun insertActivity(activity: ActivityItem): Long // Возвращает new rowId
-
-
-
-    @Query("DELETE FROM activity_items WHERE id = :activityId OR firebaseId = :activityId") // Универсальное удаление по локальному или firebase ID
-    suspend fun deleteActivity(activityId: String) // Если ID всегда String. Если ID может быть Long, нужно два метода или более сложный запрос.
-
-    @Query("SELECT * FROM activity_items WHERE id = :localId")
+    // Specific getters
+    @Query("SELECT * FROM activity_items WHERE id = :localId LIMIT 1")
     suspend fun getActivityByLocalId(localId: Long): ActivityItem?
 
-    // Пример Flow для получения всех активностей пользователя (можно фильтровать по дате)
-    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC")
-    fun getActivitiesFlow(userId: String): Flow<List<ActivityItem>>
+    @Query("SELECT * FROM activity_items WHERE firebaseId = :firebaseId LIMIT 1")
+    suspend fun getActivityByFirebaseId(firebaseId: String): ActivityItem?
 
-    // Если нужно получать активности на сегодня (createdAt должен быть правильно настроен)
-    // Это потребует более сложного запроса для сравнения дат, или ты будешь фильтровать в коде.
-    // Пример простого Flow, который ты будешь фильтровать позже:
-    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC") // Добавь фильтр по дате, если нужно
-    fun getActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
-
+    // Alias for getActivityByFirebaseId for clarity in repository's sync logic
     @Query("SELECT * FROM activity_items WHERE firebaseId = :fid LIMIT 1")
     suspend fun getByFirebaseId(fid: String): ActivityItem?
+
+
+    // Flows for observing data
+    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC")
+    fun getActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
+
+    // Unused/Duplicate DAO methods to consider removing:
+    // @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertOrReplaceActivity(activity: ActivityItem): Long // Duplicate of insertActivity
+    // @Query("DELETE FROM activity_items WHERE id = :activityId") suspend fun deleteActivityById(activityId: Long) // Covered by @Delete if you fetch item first
+    // @Query("DELETE FROM activity_items WHERE firebaseId = :firebaseId") suspend fun deleteActivityByFirebaseId(firebaseId: String) // Covered by @Delete if you fetch item first
+    // @Query("SELECT * FROM activity_items WHERE id = :activityId") suspend fun getActivityById(activityId: Long): ActivityItem? // Duplicate of getActivityByLocalId
+    // @Query("DELETE FROM activity_items WHERE id = :activityId OR firebaseId = :activityId") suspend fun deleteActivity(activityId: String) // Risky; use specific deletion after fetching
+    // @Query("SELECT * FROM activity_items WHERE userId = :userId AND createdAt >= :startOfDayMillis AND createdAt < :endOfDayMillis ORDER BY createdAt DESC")
+    // fun getActivitiesForUserAndDateRangeFlow(userId: String, startOfDayMillis: Long, endOfDayMillis: Long): Flow<List<ActivityItem>> // Can be done by filtering getActivitiesForUserFlow in repo
+    // @Query("UPDATE activity_items SET totalDurationMillisToday = :durationMillis WHERE id = :activityId") suspend fun updateDurationForActivity(activityId: Long, durationMillis: Long) // Prefer full updateActivity
+    // @Query("UPDATE activity_items SET totalDurationMillisToday = :durationMillis WHERE firebaseId = :firebaseId") suspend fun updateDurationForActivityByFirebaseId(firebaseId: String, durationMillis: Long) // Prefer full updateActivity
+    // @Query("UPDATE activity_items SET isActive = :isActive WHERE id = :activityId") suspend fun updateActiveStateForActivity(activityId: Long, isActive: Boolean) // Prefer full updateActivity
+    // @Query("UPDATE activity_items SET isActive = :isActive WHERE firebaseId = :firebaseId") suspend fun updateActiveStateForActivityByFirebaseId(firebaseId: String, isActive: Boolean) // Prefer full updateActivity
 }

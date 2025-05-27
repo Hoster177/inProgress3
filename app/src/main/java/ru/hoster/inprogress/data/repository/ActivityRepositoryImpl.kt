@@ -12,226 +12,349 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import ru.hoster.inprogress.domain.model.AuthService
-import java.util.Calendar // Для фильтрации по дате
-
-// Убедись, что импортировано
+import java.util.Calendar
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach // Для логирования эмиссий
-import ru.hoster.inprogress.data.repository.remote.FirestoreActivityRepository
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import ru.hoster.inprogress.data.TimerSession
+import ru.hoster.inprogress.data.local.TimerSessionDao
+// import ru.hoster.inprogress.data.repository.remote.FirestoreActivityRepository // Assuming this is not used directly now for sync
 import ru.hoster.inprogress.di.ApplicationScope
-import java.util.Date // Для форматирования в логах
-import java.text.SimpleDateFormat // Для форматирования в логах
-import java.util.Locale // Для форматирования в логах
+import java.util.Date
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Singleton
-
 class ActivityRepositoryImpl @Inject constructor(
     private val activityDao: ActivityDao,
+    private val timerSessionDao: TimerSessionDao, // Keep if repository manages sessions directly
     private val firestore: FirebaseFirestore,
     private val authService: AuthService,
-    private val fireRepo: FirestoreActivityRepository,
+    // private val fireRepo: FirestoreActivityRepository, // Removed if direct sync logic is below
     @ApplicationScope private val appScope: CoroutineScope
 ) : ActivityRepository {
 
-
     init {
-        // при старте подписываемся на изменения в Firestore и зеркалим их в Room
         val uid = authService.getCurrentUserId()
         if (!uid.isNullOrBlank()) {
-            fireRepo.getActivitiesFlow(uid)
-                .onEach { remoteList ->
-                    // сохранить каждую активность из Firestore
-                    remoteList.forEach { remote ->
-                        // вставляем или обновляем; если уже есть firebaseId — это обновление
-                        val local = activityDao.getByFirebaseId(remote.firebaseId!!)
-                        if (local == null) {
-                            activityDao.insertActivity(remote)
-                        } else {
-                            activityDao.updateActivity(
-                                local.copy(
-                                    name = remote.name,
-                                    totalDurationMillisToday = remote.totalDurationMillisToday,
-                                    isActive = remote.isActive,
-                                    colorHex = remote.colorHex
-                                )
-                            )
+            Log.d("ActivityRepo_Sync", "Initializing Firestore sync for user: $uid")
+            firestore.collection("users").document(uid).collection("activities")
+                .addSnapshotListener { snapshots, e ->
+                    if (e != null) {
+                        Log.w("ActivityRepo_Sync", "Firestore listen failed.", e)
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshots == null) {
+                        Log.w("ActivityRepo_Sync", "Firestore snapshots are null.")
+                        return@addSnapshotListener
+                    }
+                    Log.d("ActivityRepo_Sync", "Received ${snapshots.documents.size} remote activities snapshot.")
+
+                    appScope.launch { // Perform DB operations in appScope
+                        for (doc in snapshots.documents) {
+                            try {
+                                val remoteActivity = doc.toObject(ActivityItem::class.java)?.copy(firebaseId = doc.id)
+                                if (remoteActivity == null || remoteActivity.firebaseId.isNullOrBlank()) {
+                                    Log.w("ActivityRepo_Sync", "Skipping remote activity, could not parse or blank firebaseId. Doc ID: ${doc.id}")
+                                    continue
+                                }
+
+                                // Ensure userId from doc/auth matches the activity's userId if it's part of ActivityItem
+                                // For now, assuming remoteActivity.userId is correctly populated from Firestore doc.
+                                // If not, remoteActivity = remoteActivity.copy(userId = uid)
+
+                                val existingLocalItem = activityDao.getByFirebaseId(remoteActivity.firebaseId!!) // Non-null asserted by check above
+
+                                if (existingLocalItem == null) {
+                                    Log.i("ActivityRepo_Sync", "Inserting new activity from Firestore: Name='${remoteActivity.name}', FB_ID='${remoteActivity.firebaseId}'")
+                                    // Ensure local ID is generated by Room by setting id to 0L
+                                    activityDao.insertActivity(remoteActivity.copy(id = 0L))
+                                } else {
+                                    // Item exists, update it. Preserve existingLocalItem.id
+                                    Log.i("ActivityRepo_Sync", "Updating local activity from Firestore: Name='${remoteActivity.name}', Local_ID=${existingLocalItem.id}, FB_ID='${remoteActivity.firebaseId}'")
+                                    activityDao.updateActivity(
+                                        existingLocalItem.copy( // Use existingLocalItem.id to ensure correct update
+                                            name = remoteActivity.name,
+                                            // IMPORTANT: totalDurationMillisToday and isActive should ideally be calculated
+                                            // locally based on TimerSessions, not just taken from remote,
+                                            // unless Firestore is the single source of truth for these.
+                                            totalDurationMillisToday = remoteActivity.totalDurationMillisToday,
+                                            isActive = remoteActivity.isActive,
+                                            colorHex = remoteActivity.colorHex,
+                                            createdAt = remoteActivity.createdAt, // Or decide which timestamp to keep
+                                            userId = remoteActivity.userId // Should match
+                                        )
+                                    )
+                                }
+                            } catch (parseEx: Exception) {
+                                Log.e("ActivityRepo_Sync", "Error parsing remote activity from doc ID: ${doc.id}", parseEx)
+                            }
                         }
+                        Log.d("ActivityRepo_Sync", "Finished processing snapshot.")
                     }
                 }
-                .launchIn(appScope) // ApplicationScope — скоуп, живущий пока процесс
+        } else {
+            Log.w("ActivityRepo_Sync", "No user ID, Firestore sync not initialized.")
         }
     }
-
-
 
     override suspend fun addActivity(activity: ActivityItem) {
-        try {
-            // 1. Сохраняем в локальную базу данных Room
-            // createdAt уже установлен в ActivityItem при создании
-            val localId = activityDao.insertActivity(activity)
-            val activityWithLocalId = activity.copy(id = localId) // Обновляем объект с локальным ID
-
-            Log.d("ActivityRepo", "Activity inserted locally with ID: $localId")
-
-            // 2. Сохраняем в Firestore (если userId есть)
-            if (activityWithLocalId.userId.isNotBlank()) {
-                // Создаем копию для Firestore, чтобы избежать сохранения локального id в Firestore, если не нужно
-                // firebaseId будет сгенерирован Firestore автоматически
-                val firestoreActivityMap = activityWithLocalId.toFirestoreMap()
-
-                val documentReference = firestore.collection("users")
-                    .document(activityWithLocalId.userId)
-                    .collection("activities")
-                    .add(firestoreActivityMap)
-                    .await()
-
-                val firebaseId = documentReference.id
-                Log.d("ActivityRepo", "Activity added to Firestore with ID: $firebaseId")
-
-                // 3. Обновляем локальную запись с firebaseId, полученным от Firestore
-                activityDao.updateActivity(activityWithLocalId.copy(firebaseId = firebaseId))
-                Log.d("ActivityRepo", "Local activity updated with firebaseId: $firebaseId")
+        // This function assumes 'activity' is a NEW item from UI, so its firebaseId should be null/empty.
+        // Its 'id' should be 0L for Room to auto-generate.
+        if (!activity.firebaseId.isNullOrBlank()) {
+            Log.e("ActivityRepo_Add", "CRITICAL: addActivity called with an item that already has firebaseId: '${activity.firebaseId}'. This is for NEW items. Aborting add.")
+            // Potentially throw an IllegalArgumentException or handle as an update if that's intended (though 'add' implies new).
+            // For now, we prevent the operation that would likely cause a UNIQUE constraint error.
+            // You should investigate why a "new" activity has a firebaseId.
+            // As a fallback, you could try to fetch by this firebaseId and update, but that changes the semantics of "add".
+            val existing = activityDao.getByFirebaseId(activity.firebaseId!!)
+            if (existing != null) {
+                Log.w("ActivityRepo_Add", "Found existing item by firebaseId '${activity.firebaseId}'. Consider using 'updateActivity'.")
+                // To prevent crash, and if an update is acceptable here:
+                // updateActivity(existing.copy(name = activity.name, ... other fields from activity ...))
+                // return
+                throw IllegalStateException("addActivity called for an item that seems to exist with firebaseId: ${activity.firebaseId}")
             } else {
-                Log.w("ActivityRepo", "UserID is blank, activity only saved locally.")
+                // firebaseId is present on input 'activity' but not in DB. This is strange.
+                // Proceeding might still cause issues if this firebaseId is later generated by Firestore for another item.
+                Log.w("ActivityRepo_Add", "addActivity called with firebaseId='${activity.firebaseId}' which is not in DB, but this is unusual for a new item.")
             }
+        }
+
+        try {
+            // 1. Ensure id is 0L for Room to generate. Ensure userId is set.
+            val activityToInsert = activity.copy(
+                id = 0L,
+                userId = authService.getCurrentUserId() ?: run {
+                    Log.e("ActivityRepo_Add", "Cannot add activity: User ID is null.")
+                    throw IllegalStateException("User ID is null, cannot save activity.")
+                }
+                // firebaseId should be null or empty here
+            )
+
+            val localId = activityDao.insertActivity(activityToInsert)
+            val activityWithLocalId = activityToInsert.copy(id = localId) // Activity now has the Room-generated local ID
+
+            Log.d("ActivityRepo_Add", "Activity inserted locally: ID=$localId, Name='${activityWithLocalId.name}', UserID='${activityWithLocalId.userId}'")
+
+            // 2. Сохраняем в Firestore (userId is now guaranteed to be non-blank)
+            // firebaseId will be generated by Firestore.
+            // Create a map for Firestore, explicitly excluding local 'id' and ensuring firebaseId is not sent if null.
+            val firestoreActivityMap = activityWithLocalId.toFirestoreMap().toMutableMap()
+            firestoreActivityMap.remove("id") // Don't store local Room ID in Firestore document field
+            // firebaseId in toFirestoreMap() might be null, which is fine; Firestore handles document ID.
+
+            val documentReference = firestore.collection("users")
+                .document(activityWithLocalId.userId)
+                .collection("activities")
+                .add(firestoreActivityMap) // Firestore generates the document ID
+                .await()
+
+            val newFirebaseId = documentReference.id // This is the Firestore-generated ID
+            Log.d("ActivityRepo_Add", "Activity added to Firestore: FB_ID='$newFirebaseId'")
+
+            // 3. Обновляем локальную запись с firebaseId, полученным от Firestore
+            activityDao.updateActivity(activityWithLocalId.copy(firebaseId = newFirebaseId))
+            Log.d("ActivityRepo_Add", "Local activity (ID=$localId) updated with FB_ID='$newFirebaseId'")
+
         } catch (e: Exception) {
-            Log.e("ActivityRepo", "Error adding activity", e)
-            throw e // Пробрасываем, чтобы ViewModel обработал
+            Log.e("ActivityRepo_Add", "Error adding activity: ${e.message}", e)
+            if (e.message?.contains("UNIQUE constraint failed") == true) {
+                Log.e("ActivityRepo_Add", "UNIQUE constraint failure during addActivity. This likely means the initial 'activity' object had a conflicting firebaseId or the sync logic is racing.")
+            }
+            throw e
         }
     }
+    // ... (rest of your ActivityRepositoryImpl: updateActivity, getActivitiesForTodayFlow, etc.)
+    // Make sure toFirestoreMap() doesn't include 'id' if you don't want it in Firestore fields,
+    // and correctly handles 'firebaseId' (it should be the document ID, not a field within the document unless you have a specific reason).
 
     override suspend fun updateActivity(activity: ActivityItem) {
         try {
-            // Обновляем в Room
-            activityDao.updateActivity(activity)
-            Log.d("ActivityRepo", "Activity updated locally with ID: ${activity.id}, FirebaseID: ${activity.firebaseId}")
+            // Ensure userId is present
+            val userId = activity.userId.takeIf { it.isNotBlank() } ?: authService.getCurrentUserId() ?: run {
+                Log.e("ActivityRepo_Update", "Cannot update activity: User ID is null or blank.")
+                throw IllegalStateException("User ID is null or blank, cannot update activity.")
+            }
+            val activityToUpdate = activity.copy(userId = userId)
 
-            // Обновляем в Firestore, если есть firebaseId и userId
-            if (activity.userId.isNotBlank() && activity.firebaseId != null && activity.firebaseId.isNotBlank()) {
+
+            activityDao.updateActivity(activityToUpdate)
+            Log.d("ActivityRepo_Update", "Activity updated locally: Local_ID=${activityToUpdate.id}, FB_ID='${activityToUpdate.firebaseId}', Name='${activityToUpdate.name}'")
+
+            if (!activityToUpdate.firebaseId.isNullOrBlank()) {
+                val firestoreMap = activityToUpdate.toFirestoreMap().toMutableMap()
+                firestoreMap.remove("id") // Don't store local Room ID in Firestore field
+
                 firestore.collection("users")
-                    .document(activity.userId)
+                    .document(userId) // Use consistent userId
                     .collection("activities")
-                    .document(activity.firebaseId)
-                    .set(activity.toFirestoreMap(), SetOptions.merge()) // SetOptions.merge() для неполного обновления
+                    .document(activityToUpdate.firebaseId!!) // Non-null asserted
+                    .set(firestoreMap, SetOptions.merge())
                     .await()
-                Log.d("ActivityRepo", "Activity updated in Firestore with ID: ${activity.firebaseId}")
+                Log.d("ActivityRepo_Update", "Activity updated in Firestore: FB_ID='${activityToUpdate.firebaseId}'")
             } else {
-                Log.w("ActivityRepo", "UserID or FirebaseID is blank, activity only updated locally or not synced.")
+                Log.w("ActivityRepo_Update", "FirebaseID is blank for Local_ID=${activityToUpdate.id}, activity not synced to Firestore on update.")
             }
         } catch (e: Exception) {
-            Log.e("ActivityRepo", "Error updating activity", e)
+            Log.e("ActivityRepo_Update", "Error updating activity: ${e.message}", e)
             throw e
         }
     }
 
-    // Пример маппера в Map для Firestore. Можно вынести в отдельный файл или companion object.
+
+    // Helper to convert ActivityItem to a Map for Firestore
+    // Ensure this aligns with how ActivityItem is structured and what you want in Firestore
     private fun ActivityItem.toFirestoreMap(): Map<String, Any?> {
         return mapOf(
-            // "id" - локальный ID, обычно не храним в Firestore, если firebaseId основной
-            "firebaseId" to firebaseId, // Может быть null при первом добавлении, Firestore сгенерирует свой
+            // "id" is the local Room ID. Generally, we don't store this as a field in Firestore
+            // if firebaseId (document ID) is the canonical identifier in Firestore.
+            // "firebaseId" is the Firestore document ID. It's part of the document path,
+            // so it doesn't strictly need to be a field *inside* the document unless you want it for queries.
+            // For simplicity, let's assume it's NOT a field inside the document for now.
             "userId" to userId,
             "name" to name,
             "totalDurationMillisToday" to totalDurationMillisToday,
             "isActive" to isActive,
             "colorHex" to colorHex,
-            "createdAt" to createdAt // Firestore @ServerTimestamp сработает, если это FieldValue.serverTimestamp() или Date
-            // "lastStartTime" - если есть такое поле, тоже добавь
+            "createdAt" to createdAt // Firestore can convert java.util.Date to Timestamp
         )
     }
 
-
     override fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>> {
         val currentUserId = authService.getCurrentUserId()
-
         if (currentUserId == null) {
             Log.e("ActivityRepo", "getActivitiesForTodayFlow: No current user ID. Returning empty list.")
             return flowOf(emptyList())
         }
-
         Log.d("ActivityRepo", "getActivitiesForTodayFlow: Called for user ID: $currentUserId")
+
+        // Эти переменные уже есть в вашем коде, просто нужно их передать дальше
+        val calendar = Calendar.getInstance()
+        val todayStartDate: Date = calendar.apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.time
+        val todayEndDate: Date = calendar.apply { // Конец дня (включительно для некоторых запросов, или начало следующего дня для других)
+            set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+        }.time
+
 
         return activityDao.getActivitiesForUserFlow(currentUserId)
             .onEach { activitiesFromDao ->
                 Log.d("ActivityRepo", "getActivitiesForTodayFlow: DAO emitted ${activitiesFromDao.size} activities for user $currentUserId.")
-                // Логируем первые несколько активностей из DAO для проверки
-                activitiesFromDao.take(3).forEach { act ->
-                    Log.d("ActivityRepo", "DAO item: Name='${act.name}', CreatedAt=${formatLogDate(act.createdAt)}, IsActive=${act.isActive}, Duration=${act.totalDurationMillisToday}")
-                }
             }
             .map { activities ->
-                val calendar = Calendar.getInstance()
-                val sdfLog = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
-
-                val todayStartMillis = calendar.apply {
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                val todayEndMillis = calendar.apply {
-                    set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
-                }.timeInMillis
-
-                Log.d("ActivityRepo", "Filtering for today: Start=${formatLogDate(Date(todayStartMillis))} (${todayStartMillis}), End=${formatLogDate(Date(todayEndMillis))} (${todayEndMillis})")
-
-                val filteredActivities = activities.filter { activity ->
-                    val activityCreatedAt = activity.createdAt.time
-                    val isInRange = activityCreatedAt in todayStartMillis..todayEndMillis
-                    Log.v("ActivityRepo", "Filtering item: Name='${activity.name}', CreatedAt=${formatLogDate(activity.createdAt)} ($activityCreatedAt). In range: $isInRange")
-                    isInRange
+                // Фильтрация по дате создания (если это все еще нужно)
+                val filteredByCreationDate = activities.filter { activity ->
+                    activity.createdAt.time >= todayStartDate.time && activity.createdAt.time <= todayEndDate.time
                 }
-                Log.d("ActivityRepo", "getActivitiesForTodayFlow: After date filtering, ${filteredActivities.size} activities remain for user $currentUserId.")
-                filteredActivities
+                Log.d("ActivityRepo", "getActivitiesForTodayFlow: After creation date filtering, ${filteredByCreationDate.size} activities remain.")
+
+                // Обогащение активностей данными о сессиях
+                filteredByCreationDate.map { activity ->
+                    // Получаем сессии для текущей активности за сегодня
+                    // Используем todayStartDate и todayEndDate, которые мы определили выше
+                    val sessionsForActivityToday = timerSessionDao.getSessionsForDateRangeFlow(
+                        uid = activity.userId, // или currentUserId, если уверены, что они совпадают
+                        from = todayStartDate,
+                        to = todayEndDate
+                    )
+                        .firstOrNull() // Получаем первый список (или null, если Flow пустой)
+                        ?.filter { it.activityId == activity.id } // Фильтруем по ID текущей активности
+                        ?: emptyList()
+
+                    val isActive = sessionsForActivityToday.any { it.endTime == null } // Активна, если есть хоть одна сессия без endTime
+
+                    val durationTodayMillis = sessionsForActivityToday.sumOf { session ->
+                        val startTime = session.startTime.time
+                        // Если сессия активна, считаем длительность до текущего момента
+                        val endTime = session.endTime?.time ?: System.currentTimeMillis()
+                        // Убедимся, что endTime не раньше startTime (на всякий случай)
+                        if (endTime > startTime) endTime - startTime else 0L
+                    }
+
+                    Log.d("ActivityRepo_Enrich", "Activity: '${activity.name}' (ID: ${activity.id}), IsActive: $isActive, DurationToday: $durationTodayMillis ms, SessionsFound: ${sessionsForActivityToday.size}")
+
+                    activity.copy(
+                        isActive = isActive,
+                        totalDurationMillisToday = durationTodayMillis
+                    )
+                }
             }
             .onEach { finalActivities ->
-                Log.i("ActivityRepo", "getActivitiesForTodayFlow: 최종적으로 UI로 전달될 활동 개수: ${finalActivities.size} for user $currentUserId.")
+                Log.i("ActivityRepo", "getActivitiesForTodayFlow: Final activities for UI: ${finalActivities.size} for user $currentUserId.")
                 finalActivities.take(3).forEach { act ->
-                    Log.i("ActivityRepo", "Final item: Name='${act.name}', CreatedAt=${formatLogDate(act.createdAt)}")
+                    Log.i("ActivityRepo_Enrich_Final", "Final item: Name='${act.name}', LocalID=${act.id}, IsActive=${act.isActive}, Duration=${act.totalDurationMillisToday}")
                 }
             }
-
     }
 
-    override suspend fun getActivityById(activityId: String): ActivityItem? {
-        // Пытаемся сначала найти по firebaseId (если activityId - это firebaseId)
-        var activity = activityDao.getActivityByFirebaseId(activityId)
+
+    override suspend fun getActivityById(activityIdString: String): ActivityItem? {
+        // activityIdString can be either a local Long ID (as String) or a firebaseId String.
+        var activity: ActivityItem? = activityDao.getActivityByFirebaseId(activityIdString)
         if (activity == null) {
-            // Если не нашли, и если activityId может быть локальным Long ID, конвертируем и ищем
-            activityId.toLongOrNull()?.let { localId ->
+            activityIdString.toLongOrNull()?.let { localId ->
                 activity = activityDao.getActivityByLocalId(localId)
             }
         }
-        Log.d("ActivityRepo", "getActivityById for ID: $activityId, found: ${activity != null}")
+        Log.d("ActivityRepo", "getActivityById for criteria: '$activityIdString', found: ${activity != null} (Name: ${activity?.name}, LocalID: ${activity?.id}, FbID: ${activity?.firebaseId})")
         return activity
-        // TODO: Добавить логику получения из Firestore, если в локальной БД нет, и последующее сохранение локально.
     }
 
-    override suspend fun deleteActivity(activityId: String) {
+    override suspend fun deleteActivity(activityIdString: String) {
+        // activityIdString can be local Long ID (as String) or firebaseId String
+        val activityToDelete = getActivityById(activityIdString) // Fetches by either
+
+        if (activityToDelete == null) {
+            Log.w("ActivityRepo_Delete", "Activity not found for deletion criteria: '$activityIdString'. Cannot delete.")
+            return
+        }
+
         try {
-            // Сначала получаем объект, чтобы знать userId и firebaseId для удаления из Firestore
-            val activityToDelete = getActivityById(activityId)
+            // Delete from Room using its local primary key for safety
+            activityDao.deleteActivity(activityToDelete) // Assumes @Delete takes the object
+            Log.d("ActivityRepo_Delete", "Activity deleted locally: Name='${activityToDelete.name}', Local_ID=${activityToDelete.id}")
 
-            // Удаляем из Room по activityId (который может быть firebaseId или локальным)
-            activityDao.deleteActivity(activityId)
-            Log.d("ActivityRepo", "Activity deleted locally with ID criteria: $activityId")
-
-            if (activityToDelete != null && activityToDelete.userId.isNotBlank() && activityToDelete.firebaseId != null && activityToDelete.firebaseId.isNotBlank()) {
+            // Delete from Firestore if firebaseId exists
+            if (!activityToDelete.firebaseId.isNullOrBlank() && activityToDelete.userId.isNotBlank()) {
                 firestore.collection("users")
                     .document(activityToDelete.userId)
                     .collection("activities")
-                    .document(activityToDelete.firebaseId)
+                    .document(activityToDelete.firebaseId!!) // Non-null asserted
                     .delete()
                     .await()
-                Log.d("ActivityRepo", "Activity deleted from Firestore with FirebaseID: ${activityToDelete.firebaseId}")
+                Log.d("ActivityRepo_Delete", "Activity deleted from Firestore: FB_ID='${activityToDelete.firebaseId}'")
             } else {
-                Log.w("ActivityRepo", "Could not delete from Firestore: missing IDs or activity not found for ID criteria $activityId")
+                Log.w("ActivityRepo_Delete", "Could not delete from Firestore: missing firebaseId or userId for Local_ID=${activityToDelete.id}")
             }
         } catch (e: Exception) {
-            Log.e("ActivityRepo", "Error deleting activity for ID criteria: $activityId", e)
+            Log.e("ActivityRepo_Delete", "Error deleting activity (Local_ID=${activityToDelete.id}, FB_ID='${activityToDelete.firebaseId}'): ${e.message}", e)
             throw e
         }
     }
 
+    // These session methods might conflict with TimerService.
+    // If HomeViewModel uses TimerService, these might not be needed here or should be coordinated.
+    override suspend fun startSession(activityId: Long) {
+        val user = authService.getCurrentUserId() ?: return
+        Log.d("ActivityRepo", "Deprecated startSession called for activityId: $activityId. Use TimerService.")
+        // timerSessionDao.insertSession(...) // Potentially remove if TimerService handles all
+    }
+
+    override suspend fun stopSession(activityId: Long) {
+        val user = authService.getCurrentUserId() ?: return
+        Log.d("ActivityRepo", "Deprecated stopSession called for activityId: $activityId. Use TimerService.")
+        // timerSessionDao.updateSession(...) // Potentially remove
+    }
+    override fun getSessionsForDateRange(uid: String, from: Date, to: Date): Flow<List<TimerSession>> {
+        return timerSessionDao.getSessionsForDateRangeFlow(uid, from, to)
+    }
     private fun formatLogDate(date: Date): String {
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z", Locale.US)
         return sdf.format(date)

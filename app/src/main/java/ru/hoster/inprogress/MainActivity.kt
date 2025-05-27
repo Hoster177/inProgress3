@@ -115,7 +115,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 // Замените
                                 onDeleteActivityClick = { activityId -> homeViewModel.onDeleteActivityClick(activityId)},
-                                onActivityTimerToggle = {  activityId, isActive -> homeViewModel.onActivityTimerToggle(activityId, isActive)  /* Пока ничего не делаем */ },
+                                onActivityTimerToggle = {  activityId-> homeViewModel.onActivityTimerToggle(activityId)  /* Пока ничего не делаем */ },
                                 uiState = uiState, // <--- ЗАМЕНА
                                 onAddNewGoalClick = { /* Пока ничего не делаем */ },
                                 onViewAllGoalsClick = { /* Пока ничего не делаем */ }

@@ -5,6 +5,7 @@ import ru.hoster.inprogress.domain.model.Result
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import ru.hoster.inprogress.data.ActivityItem
+import ru.hoster.inprogress.data.TimerSession
 import java.util.Date
 import java.util.UUID
 
@@ -62,6 +63,22 @@ class FakeActivityRepository : ActivityRepository {
     }
 
     override suspend fun addActivity(activityToSave: ActivityItem) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun startSession(activityId: Long) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun stopSession(activityId: Long) {
+        TODO("Not yet implemented")
+    }
+
+    override fun getSessionsForDateRange(
+        uid: String,
+        from: Date,
+        to: Date
+    ): Flow<List<TimerSession>> {
         TODO("Not yet implemented")
     }
 

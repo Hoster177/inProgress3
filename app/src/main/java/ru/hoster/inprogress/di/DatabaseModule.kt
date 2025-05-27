@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import ru.hoster.inprogress.data.local.ActivityDao
 import ru.hoster.inprogress.data.AppDatabase
+import ru.hoster.inprogress.data.local.TimerSessionDao
 import javax.inject.Singleton
 
 @Module
@@ -31,6 +32,12 @@ object DatabaseModule {
     @Singleton // Dao обычно тоже синглтоны, так как они привязаны к единственному экземпляру БД
     fun provideActivityDao(appDatabase: AppDatabase): ActivityDao {
         return appDatabase.activityDao()
+    }
+
+    @Provides
+    @Singleton // Dao обычно тоже синглтоны, так как они привязаны к единственному экземпляру БД
+    fun provideTimerSessionDao(appDatabase: AppDatabase): TimerSessionDao {
+        return appDatabase.timerSessionDao()
     }
 
     // Если у тебя есть GoalDao, добавь аналогичный @Provides метод для него:

@@ -60,7 +60,7 @@ fun MainScreen(
     onAddActivityClick: () -> Unit,
     onEditGoalClick: (goalId: String) -> Unit,
     onDeleteActivityClick: (activityId: String) -> Unit,
-    onActivityTimerToggle: (activityId: String, currentActiveState: Boolean) -> Unit,
+    onActivityTimerToggle: (activityId: String,/* currentActiveState: Boolean*/) -> Unit,
     onAddNewGoalClick: () -> Unit,
     onViewAllGoalsClick: () -> Unit
 ) {
@@ -157,16 +157,18 @@ fun MainScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 } else {
-
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(
-                            items = uiState.activities, // Убедись, что это именно uiState.activities
-                            key = { activity -> activity.firebaseId ?: activity.id.toString() } // Изменил activity.id на activity.id.toString() для консистентности ключа
-                        ) { activity ->
-                            val idToPass = activity.firebaseId ?: activity.id.toString()
+                            items = uiState.activities, // Теперь это List<ActivityItemUi>
+                            key = { activityUi -> // Имя параметра изменено на activityUi для ясности
+                                activityUi.baseActivity.firebaseId ?: activityUi.baseActivity.id.toString() // <--- ИСПРАВЛЕНИЕ ЗДЕСЬ
+                            }
+                        ) { activityUi -> // Имя параметра изменено на activityUi
+                            val idToPass = activityUi.baseActivity.firebaseId ?: activityUi.baseActivity.id.toString() // <--- ИСПРАВЛЕНИЕ ЗДЕСЬ
                             ActivityItemRow(
-                                activity = activity,
-                                onTimerToggle = { onActivityTimerToggle(idToPass, activity.isActive) },
+                                activityUi = activityUi, // Передаем ActivityItemUi
+                                // currentTimerFormatted = if (activityUi.baseActivity.id == uiState.currentlyTimingActivityId) uiState.currentlyTimingDurationFormatted else null,
+                                onTimerToggle = { onActivityTimerToggle(idToPass) }, // Передаем только ID
                                 onDeleteClick = { onDeleteActivityClick(idToPass) }
                             )
                             Divider()
@@ -215,7 +217,8 @@ fun GoalItem(goal: Goal, onEditClick: () -> Unit) {
 
 @Composable
 fun ActivityItemRow(
-    activity: ActivityItem,
+    activityUi: ActivityItemUi, // Принимаем ActivityItemUi
+    // currentTimerFormatted: String?, // Если хотим показывать только тикающее время отдельно
     onTimerToggle: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -234,18 +237,29 @@ fun ActivityItemRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(activity.name, style = MaterialTheme.typography.titleMedium)
+                Text(activityUi.baseActivity.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Сегодня: ${formatDuration(activity.totalDurationMillisToday)}",
+                    // Используем displayDurationFormatted из ActivityItemUi,
+                    // который обновляется ViewModel-ом
+                    "Сегодня: ${activityUi.displayDurationFormatted}",
                     style = MaterialTheme.typography.bodyMedium
                 )
+                // Если вы хотите также показывать отдельно время текущей сессии, если она активна:
+                // if (activityUi.isCurrentlyActive && currentTimerFormatted != null) {
+                //    Text(
+                //        "Сессия: $currentTimerFormatted",
+                //        style = MaterialTheme.typography.bodySmall,
+                //        color = MaterialTheme.colorScheme.primary
+                //    )
+                // }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onTimerToggle) {
                     Icon(
-                        if (activity.isActive) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (activity.isActive) "Пауза" else "Старт",
-                        tint = if (activity.isActive) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        // Состояние берем из activityUi.isCurrentlyActive
+                        if (activityUi.isCurrentlyActive) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (activityUi.isCurrentlyActive) "Пауза" else "Старт",
+                        tint = if (activityUi.isCurrentlyActive) MaterialTheme.colorScheme.primary else LocalContentColor.current
                     )
                 }
                 IconButton(onClick = { showDeleteDialog = true }) {
@@ -259,7 +273,7 @@ fun ActivityItemRow(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Подтвердить удаление") },
-            text = { Text("Вы уверены, что хотите удалить занятие \"${activity.name}\"? Все данные будут удалены.") },
+            text = { Text("Вы уверены, что хотите удалить занятие \"${activityUi.baseActivity.name}\"? Все данные будут удалены.") }, // <--- ИСПРАВЛЕНИЕ ЗДЕСЬ
             confirmButton = {
                 Button(
                     onClick = {
@@ -296,7 +310,7 @@ fun MainScreenPreview_Empty() {
             onAddActivityClick = {},
             onEditGoalClick = {},
             onDeleteActivityClick = {},
-            onActivityTimerToggle = { _, _ -> },
+            onActivityTimerToggle = { _-> },
             onAddNewGoalClick = {},
             onViewAllGoalsClick = {}
         )
@@ -307,66 +321,59 @@ fun MainScreenPreview_Empty() {
 @Composable
 fun MainScreenPreview_WithData() {
     val sampleGoals = listOf(
-        Goal(
-            id = 1L,
-            firebaseId = "g1",
-            userId = "uid1", // Required
-            title = "Проект Альфа", // Required
-            description = "Завершить основной функционал", // Nullable, provided
-            type = GoalType.TIME_PER_PERIOD, // Required
-            targetDurationMillis = 10 * 3600000L,
-            currentProgressMillis = 2 * 3600000L,
-            periodDays = 7,
-            createdAt = Date(), // Nullable, provided
-            // Other fields will use defaults from Goal data class (0, null, false)
-        ),
-        Goal(
-            id = 2L,
-            firebaseId = "g2",
-            userId = "uid1", // Required
-            title = "Ежедневное чтение", // Required
-            description = "Читать по 30 минут", // Nullable, provided
-            type = GoalType.CONSECUTIVE_DAYS, // Required
-            targetConsecutiveDays = 5,
-            currentConsecutiveDays = 2,
-            createdAt = Date() // Nullable, provided
-        )
+        Goal(id = 1L, firebaseId = "g1", userId = "uid1", title = "Проект Альфа", description = "Завершить основной функционал", type = GoalType.TIME_PER_PERIOD, targetDurationMillis = 10 * 3600000L, currentProgressMillis = 2 * 3600000L, periodDays = 7, createdAt = Date()),
+        Goal(id = 2L, firebaseId = "g2", userId = "uid1", title = "Ежедневное чтение", description = "Читать по 30 минут", type = GoalType.CONSECUTIVE_DAYS, targetConsecutiveDays = 5, currentConsecutiveDays = 2, createdAt = Date())
     )
     val sampleActivities = listOf(
         ActivityItem(id = 1, firebaseId = "a1", userId = "uid1", name = "Разработка UI", totalDurationMillisToday = 3600000L, isActive = true, createdAt = Date()),
         ActivityItem(id = 2, firebaseId = "a2", userId = "uid1", name = "Встреча с командой", totalDurationMillisToday = 1800000L, isActive = false, createdAt = Date())
     )
+    // Преобразуем ActivityItem в ActivityItemUi для превью
+    val sampleActivitiesUi = sampleActivities.map {
+        ActivityItemUi(
+            baseActivity = it,
+            displayDurationMillis = it.totalDurationMillisToday,
+            displayDurationFormatted = formatDuration(it.totalDurationMillisToday), // Используем локальную formatDuration
+            isCurrentlyActive = it.isActive
+        )
+    }
     MaterialTheme {
         MainScreen(
-            uiState = MainScreenUiState(
+            uiState = MainScreenUiState( // MainScreenUiState теперь ожидает List<ActivityItemUi>
                 currentDate = "21 мая 2025",
                 dailyTotalTimeFormatted = "01:30:45",
                 goals = sampleGoals,
-                activities = sampleActivities
+                activities = sampleActivitiesUi // Передаем sampleActivitiesUi
             ),
             onDailyTimerClick = {},
             onAddActivityClick = {},
             onEditGoalClick = {},
             onDeleteActivityClick = {},
-            onActivityTimerToggle = { _, _ -> },
+            onActivityTimerToggle = { _-> }, // Обновленный параметр
             onAddNewGoalClick = {},
             onViewAllGoalsClick = {}
         )
     }
 }
 
+
 @Preview(showBackground = true)
 @Composable
 fun ActivityItemRowPreview_Active() {
     MaterialTheme {
         ActivityItemRow(
-            activity = ActivityItem(
-                id = 1,
-                userId = "previewUser",
-                name = "Кодинг фичи",
-                totalDurationMillisToday = 7425000L,
-                isActive = true,
-                createdAt = Date()
+            activityUi = ActivityItemUi( // Передаем ActivityItemUi
+                baseActivity = ActivityItem(
+                    id = 1,
+                    userId = "previewUser",
+                    name = "Кодинг фичи",
+                    totalDurationMillisToday = 7425000L,
+                    isActive = true,
+                    createdAt = Date()
+                ),
+                displayDurationMillis = 7425000L, // Пример
+                displayDurationFormatted = formatDuration(7425000L), // Используем локальную formatDuration
+                isCurrentlyActive = true
             ),
             onTimerToggle = {},
             onDeleteClick = {}
