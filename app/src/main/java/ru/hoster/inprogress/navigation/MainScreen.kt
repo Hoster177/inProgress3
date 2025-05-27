@@ -212,15 +212,6 @@ fun GoalItem(goal: Goal, onEditClick: () -> Unit) {
         }
     }
 }
-//@Composable
-//fun ActivityItemRow(
-//    activity: ActivityItem,
-//    onTimerToggle: () -> Unit,
-//    onDeleteClick: () -> Unit
-//) {
-//    Box(modifier = Modifier.fillMaxWidth().background(Color.Cyan).padding(4.dp)) {
-//    Text("Activity: ${activity.name} (ID: ${activity.firebaseId ?: activity.id})", modifier = Modifier.padding(16.dp).fillMaxWidth())
-//}}
 
 @Composable
 fun ActivityItemRow(

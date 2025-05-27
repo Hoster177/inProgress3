@@ -35,4 +35,7 @@ abstract class RepositoryModule { // Можно объединить с AuthModu
     abstract fun bindGoalRepository(
         goalRepositoryImpl: GoalRepositoryImpl
     ): GoalRepository
+
+
+
 }

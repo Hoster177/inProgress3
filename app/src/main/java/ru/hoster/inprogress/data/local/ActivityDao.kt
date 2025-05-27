@@ -78,4 +78,7 @@ interface ActivityDao {
     // Пример простого Flow, который ты будешь фильтровать позже:
     @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC") // Добавь фильтр по дате, если нужно
     fun getActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
+
+    @Query("SELECT * FROM activity_items WHERE firebaseId = :fid LIMIT 1")
+    suspend fun getByFirebaseId(fid: String): ActivityItem?
 }

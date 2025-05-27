@@ -16,6 +16,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import ru.hoster.inprogress.data.repository.remote.FirestoreActivityRepository
 import ru.hoster.inprogress.data.service.FirebaseAuthService
 import javax.inject.Singleton
 
@@ -56,9 +60,15 @@ object AppModule {
         return FirestoreGroupRepository(firestore) // Provide real implementation
     }
 
-//    @Provides
-//    @Singleton
-//    fun provideActivityRepository(): ActivityRepository {
-//        return FakeActivityRepository()
-//    }
+    @Provides
+    @ApplicationScope
+    fun provideApplicationScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @Singleton
+    fun provideActivityRepository(firestore: FirebaseFirestore): FirestoreActivityRepository {
+        return FirestoreActivityRepository(firestore)
+    }
+
 }

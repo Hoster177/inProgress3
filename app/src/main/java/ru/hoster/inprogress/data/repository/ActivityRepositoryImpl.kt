@@ -11,23 +11,61 @@ import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import ru.hoster.inprogress.domain.model.AuthService
 import java.util.Calendar // Для фильтрации по дате
 
 // Убедись, что импортировано
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach // Для логирования эмиссий
+import ru.hoster.inprogress.data.repository.remote.FirestoreActivityRepository
+import ru.hoster.inprogress.di.ApplicationScope
 import java.util.Date // Для форматирования в логах
 import java.text.SimpleDateFormat // Для форматирования в логах
 import java.util.Locale // Для форматирования в логах
 
 @Singleton
+
 class ActivityRepositoryImpl @Inject constructor(
     private val activityDao: ActivityDao,
+    private val firestore: FirebaseFirestore,
     private val authService: AuthService,
-    private val firestore: FirebaseFirestore // Убедись, что FirebaseFirestore предоставляется через Hilt (например, в AppModule)
+    private val fireRepo: FirestoreActivityRepository,
+    @ApplicationScope private val appScope: CoroutineScope
 ) : ActivityRepository {
+
+
+    init {
+        // при старте подписываемся на изменения в Firestore и зеркалим их в Room
+        val uid = authService.getCurrentUserId()
+        if (!uid.isNullOrBlank()) {
+            fireRepo.getActivitiesFlow(uid)
+                .onEach { remoteList ->
+                    // сохранить каждую активность из Firestore
+                    remoteList.forEach { remote ->
+                        // вставляем или обновляем; если уже есть firebaseId — это обновление
+                        val local = activityDao.getByFirebaseId(remote.firebaseId!!)
+                        if (local == null) {
+                            activityDao.insertActivity(remote)
+                        } else {
+                            activityDao.updateActivity(
+                                local.copy(
+                                    name = remote.name,
+                                    totalDurationMillisToday = remote.totalDurationMillisToday,
+                                    isActive = remote.isActive,
+                                    colorHex = remote.colorHex
+                                )
+                            )
+                        }
+                    }
+                }
+                .launchIn(appScope) // ApplicationScope — скоуп, живущий пока процесс
+        }
+    }
+
+
 
     override suspend fun addActivity(activity: ActivityItem) {
         try {
@@ -151,6 +189,7 @@ class ActivityRepositoryImpl @Inject constructor(
                     Log.i("ActivityRepo", "Final item: Name='${act.name}', CreatedAt=${formatLogDate(act.createdAt)}")
                 }
             }
+
     }
 
     override suspend fun getActivityById(activityId: String): ActivityItem? {
