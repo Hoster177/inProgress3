@@ -372,6 +372,11 @@ class ActivityRepositoryImpl @Inject constructor(
     override fun getSessionsForDateRange(uid: String, from: Date, to: Date): Flow<List<TimerSession>> {
         return timerSessionDao.getSessionsForDateRangeFlow(uid, from, to)
     }
+
+    override suspend fun getAllActivities(userId: String): List<ActivityItem> {
+        return activityDao.getAllActivitiesList(userId)
+    }
+
     private fun formatLogDate(date: Date): String {
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z", Locale.US)
         return sdf.format(date)

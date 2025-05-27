@@ -3,7 +3,6 @@ package ru.hoster.inprogress
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,6 +18,7 @@ import ru.hoster.inprogress.navigation.MainScreen
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint // Убедитесь, что эта аннотация есть
+import ru.hoster.inprogress.navigation.StatsScreen
 
 // Ваши существующие импорты экранов
 import ru.hoster.inprogress.navigation.addeditactivity.AddEditActivityScreen
@@ -30,7 +30,6 @@ import ru.hoster.inprogress.navigation.HomeViewModel
 import ru.hoster.inprogress.navigation.ProfileScreen
 import ru.hoster.inprogress.navigation.Route // Ваш объект Route
 import ru.hoster.inprogress.navigation.Screen // Ваш sealed class Screen для BottomNav
-import ru.hoster.inprogress.navigation.StatisticsScreen
 import ru.hoster.inprogress.navigation.UserSettingsScreen
 import ru.hoster.inprogress.navigation.achievements.AchievementsScreen
 import ru.hoster.inprogress.navigation.groups.AddEditGroupScreen
@@ -39,8 +38,8 @@ import ru.hoster.inprogress.navigation.groups.GroupDetailsScreen
 // НОВЫЕ ИМПОРТЫ для экранов аутентификации (пути могут отличаться в зависимости от вашей структуры)
 import ru.hoster.inprogress.navigation.LoginScreen // Предполагая, что LoginScreen.kt в пакете navigation
 import ru.hoster.inprogress.navigation.MainScreenUiState
-import ru.hoster.inprogress.navigation.MainScreenUiStatePlaceholder
 import ru.hoster.inprogress.navigation.SignUpScreen // Предполагая, что SignUpScreen.kt в пакете navigation
+import ru.hoster.inprogress.navigation.StatsViewModel
 
 
 import ru.hoster.inprogress.ui.theme.InProgressTheme
@@ -140,7 +139,10 @@ class MainActivity : ComponentActivity() {
 
                         // --- Вторичные экраны ---
                         composable(Route.STATISTICS) {
-                            StatisticsScreen(navController)
+                            val viewModel: StatsViewModel = hiltViewModel()
+                            StatsScreen(
+                                viewModel = viewModel
+                            )
                         }
                         composable(
                             route = Route.addEditActivity(), // Используем helper функцию

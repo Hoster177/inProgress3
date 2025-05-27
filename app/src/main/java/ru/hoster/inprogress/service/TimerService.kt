@@ -202,4 +202,5 @@ class TimerService @Inject constructor(
     fun getAllSessionsForActivity(userId: String, activityId: Long): Flow<List<TimerSession>> {
         return timerSessionDao.getSessionsForActivityFlow(userId, activityId)
     }
+
 }

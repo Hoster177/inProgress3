@@ -73,7 +73,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core:1.6.7") // Or latest version
     implementation("androidx.compose.material:material-icons-extended:1.6.7") // Or latest version
 
-
+    implementation("io.github.vanpra.compose-material-dialogs:datetime:0.9.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

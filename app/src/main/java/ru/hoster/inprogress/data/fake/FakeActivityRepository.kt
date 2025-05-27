@@ -82,6 +82,10 @@ class FakeActivityRepository : ActivityRepository {
         TODO("Not yet implemented")
     }
 
+    override suspend fun getAllActivities(userId: String): List<ActivityItem> {
+        TODO("Not yet implemented")
+    }
+
     suspend fun insertActivity(activity: ActivityData): Result<String> {
         delay(400)
         val newId = activity.id.ifEmpty { UUID.randomUUID().toString() }

@@ -34,6 +34,10 @@ interface ActivityDao {
     @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC")
     fun getActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
 
+    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY name ASC") // Или другая сортировка
+    suspend fun getAllActivitiesList(userId: String): List<ActivityItem> // Для однократного получения списка
+
+
     // Unused/Duplicate DAO methods to consider removing:
     // @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertOrReplaceActivity(activity: ActivityItem): Long // Duplicate of insertActivity
     // @Query("DELETE FROM activity_items WHERE id = :activityId") suspend fun deleteActivityById(activityId: Long) // Covered by @Delete if you fetch item first

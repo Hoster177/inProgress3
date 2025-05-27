@@ -15,18 +15,15 @@ interface TimerSessionDao {
     @Update
     suspend fun updateSession(session: TimerSession)
 
-    /** получить все сессии пользователя, отсортированные по startTime */
-    @Query("SELECT * FROM timer_sessions WHERE userId = :uid ORDER BY startTime DESC")
-    fun getAllSessionsFlow(uid: String): Flow<List<TimerSession>>
+    // Получить все сессии для пользователя (для отладки или других нужд)
+    @Query("SELECT * FROM timer_sessions WHERE userId = :userId ORDER BY startTime DESC")
+    fun getAllSessionsFlow(userId: String): Flow<List<TimerSession>>
+
 
     /** получить сессии в диапазоне дат (inclusive) */
-    @Query("""
-    SELECT * FROM timer_sessions
-     WHERE userId = :uid
-       AND date(startTime/1000, 'unixepoch') BETWEEN date(:from/1000,'unixepoch') AND date(:to/1000,'unixepoch')
-     ORDER BY startTime ASC
-  """)
-    fun getSessionsForDateRangeFlow(uid: String, from: Date, to: Date): Flow<List<TimerSession>>
+
+    @Query("SELECT * FROM timer_sessions WHERE userId = :userId AND startTime BETWEEN :fromDate AND :toDate ORDER BY startTime DESC")
+    fun getSessionsForDateRangeFlow(userId: String, fromDate: Date, toDate: Date): Flow<List<TimerSession>>
 
     /**
      * Получить активную сессию (endTime IS NULL) для указанной задачи и пользователя.
@@ -41,4 +38,8 @@ interface TimerSessionDao {
      */
     @Query("SELECT * FROM timer_sessions WHERE userId = :userId AND activityId = :activityId ORDER BY startTime DESC")
     fun getSessionsForActivityFlow(userId: String, activityId: Long): Flow<List<TimerSession>>
+
+    // Если нужен не Flow, а просто suspend функция для однократного получения:
+    @Query("SELECT * FROM timer_sessions WHERE userId = :userId AND startTime BETWEEN :fromDate AND :toDate ORDER BY startTime DESC")
+    suspend fun getSessionsForDateRange(userId: String, fromDate: Date, toDate: Date): List<TimerSession>
 }
