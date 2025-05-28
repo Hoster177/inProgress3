@@ -52,4 +52,8 @@ class FakeUserRepository : UserRepository {
     override fun getUserProfileFlow(userId: String): Flow<UserData?> {
         TODO("Not yet getUserProfileFlow")
     }
+
+    override suspend fun updateUserProfile(user: UserData): Result<Unit> {
+        TODO("Not yet implemented")
+    }
 }

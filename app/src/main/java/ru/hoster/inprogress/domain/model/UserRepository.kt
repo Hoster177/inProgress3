@@ -17,5 +17,5 @@ interface UserRepository {
     suspend fun createUserProfile(user: UserData): Result<Unit>
     fun getUserProfileFlow(userId: String): Flow<UserData?> // Если нужна реактивность
     // Можно добавить другие методы:
-    // suspend fun updateUserProfile(user: UserData): Result<Unit>
+    suspend fun updateUserProfile(user: UserData): Result<Unit>
 }

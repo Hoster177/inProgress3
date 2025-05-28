@@ -21,12 +21,31 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
 
     private val db: FirebaseFirestore = Firebase.firestore
     private val usersCollection = db.collection("users")
+
     override suspend fun getUserById(userId: String): Result<UserData?> {
-        TODO("Not yet getUserById")
+        return try {
+            val documentSnapshot = usersCollection.document(userId).get().await()
+            val user = documentSnapshot.toObject(UserData::class.java)
+            Result.Success(user)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
     }
 
     override suspend fun getUsersByIds(userIds: List<String>): Result<List<UserData>> {
-        TODO("Not yet implemented")
+        if (userIds.isEmpty()) {
+            return Result.Success(emptyList())
+        }
+        return try {
+            // Firestore 'in' query supports up to 10 items in the list.
+            // For more, you'd need multiple queries or a different approach.
+            // This example assumes userIds.size <= 10 or proper chunking is handled elsewhere.
+            val querySnapshot = usersCollection.whereIn("userId", userIds).get().await()
+            val users = querySnapshot.toObjects(UserData::class.java)
+            Result.Success(users)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
     }
 
     override suspend fun createUserProfile(user: UserData): Result<Unit> {
@@ -67,5 +86,35 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
                 }
             }
         awaitClose { listenerRegistration.remove() }
+    }
+
+    override suspend fun updateUserProfile(user: UserData): Result<Unit> {
+        return try {
+            // Ensure userId is not empty
+            if (user.userId.isBlank()) {
+                return Result.Error(IllegalArgumentException("User ID cannot be blank for update."))
+            }
+            usersCollection.document(user.userId).set(user).await() // Or .update() for specific fields
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+    suspend fun updateUserProfile(userId: String, name: String, avatarId: String): Boolean {
+        if (userId.isBlank()) {
+            // Log error or handle appropriately
+            return false
+        }
+        return try {
+            val updates = mapOf(
+                "displayName" to name,
+                "avatarUrl" to avatarId // Assuming avatarId is the new URL or identifier for the avatar
+            )
+            usersCollection.document(userId).update(updates).await()
+            true
+        } catch (e: Exception) {
+            // Log the exception (e.g., using Timber or Log.e)
+            false
+        }
     }
 }

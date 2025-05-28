@@ -83,4 +83,8 @@ class FirebaseAuthService @Inject constructor(
             Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
         }
     }
+
+    override suspend fun getCurrentUserEmail(): String? {
+        return firebaseAuth.currentUser?.email
+    }
 }

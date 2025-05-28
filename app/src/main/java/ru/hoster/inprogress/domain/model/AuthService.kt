@@ -9,6 +9,7 @@ interface AuthService {
     suspend fun signIn(email: String, password: String): Result<Unit> // Result для обработки успеха/ошибки
     suspend fun signUp(email: String, password: String): Result<String?> // Result<UserId> при успехе
     suspend fun signOut(): Result<Unit>
+    suspend fun getCurrentUserEmail(): String?
     // Можно добавить метод для сброса пароля, если нужно
     // suspend fun sendPasswordResetEmail(email: String): Result<Unit>
 }
