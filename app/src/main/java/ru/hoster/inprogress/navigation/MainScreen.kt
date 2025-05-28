@@ -107,45 +107,45 @@ fun MainScreen(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Цели (${uiState.goals.take(3).size}/${uiState.goals.size})",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    TextButton(onClick = onViewAllGoalsClick) {
-                        Text("Все цели")
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                if (uiState.goals.isEmpty()) {
-                    Text(
-                        "Нет активных целей. Нажмите 'Все цели', чтобы добавить или изменить.",
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                } else {
-                    uiState.goals.take(3).forEach { goal ->
-                        val idToPass = goal.firebaseId ?: goal.id.toString()
-                        GoalItem(
-                            goal = goal,
-                            onEditClick = { onEditGoalClick(idToPass) }
-                        )
-                    }
-                }
-                TextButton(
-                    onClick = onAddNewGoalClick,
-                    modifier = Modifier.align(Alignment.End).padding(top = 4.dp)
-                ) {
-                    Text("Добавить новую цель")
-                }
+//                Spacer(modifier = Modifier.height(16.dp))
+//                Row(
+//                    modifier = Modifier.fillMaxWidth(),
+//                    horizontalArrangement = Arrangement.SpaceBetween,
+//                    verticalAlignment = Alignment.CenterVertically
+//                ) {
+//                    Text(
+//                        "Цели (${uiState.goals.take(3).size}/${uiState.goals.size})",
+//                        style = MaterialTheme.typography.titleLarge
+//                    )
+//                    TextButton(onClick = onViewAllGoalsClick) {
+//                        Text("Все цели")
+//                    }
+//                }
+//                Spacer(modifier = Modifier.height(8.dp))
+//                if (uiState.goals.isEmpty()) {
+//                    Text(
+//                        "Нет активных целей. Нажмите 'Все цели', чтобы добавить или изменить.",
+//                        modifier = Modifier.padding(vertical = 8.dp),
+//                        style = MaterialTheme.typography.bodyMedium
+//                    )
+//                } else {
+//                    uiState.goals.take(3).forEach { goal ->
+//                        val idToPass = goal.firebaseId ?: goal.id.toString()
+//                        GoalItem(
+//                            goal = goal,
+//                            onEditClick = { onEditGoalClick(idToPass) }
+//                        )
+//                    }
+//                }
+//                TextButton(
+//                    onClick = onAddNewGoalClick,
+//                    modifier = Modifier.align(Alignment.End).padding(top = 4.dp)
+//                ) {
+//                    Text("Добавить новую цель")
+//                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Занятия сегодня",
+                    "Занятия",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.align(Alignment.Start)
                 )
