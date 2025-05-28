@@ -25,7 +25,7 @@ class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<ProfileScreenUiState> = _uiState.asStateFlow()
 
     // These are identifiers for your drawable resources (e.g., "avatar_1", "avatar_2")
-    val predefinedAvatars: List<String> = listOf("avatar_1", "avatar_2", "avatar_3", "avatar_4", "avatar_default")
+    val predefinedAvatars: List<String> = listOf("avatar_bear", "avatar_cat", "avatar_dog", "avatar_rabbit", "avatar_default")
 
     init {
         loadUserProfile()
