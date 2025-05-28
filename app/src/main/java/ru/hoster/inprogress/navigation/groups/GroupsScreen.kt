@@ -10,76 +10,47 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-
-data class GroupPreview(
-    val id: String,
-    val name: String,
-    val memberCount: Int,
-    val description: String? = null,
-    val lastActivity: String? = "No recent activity" // Formatted string
-)
-
-data class GroupsScreenUiState(
-    val userGroups: List<GroupPreview> = emptyList(),
-    val isLoading: Boolean = false,
-    val joinGroupDialogVisible: Boolean = false,
-    val createGroupDialogVisible: Boolean = false
-)
-
-// --- Conceptual ViewModel (GroupsViewModel.kt) ---
-// class GroupsViewModel(
-//    // private val groupRepository: YourGroupRepository,
-//    // private val userRepository: YourUserRepository
-// ) : ViewModel() {
-//    private val _uiState = MutableStateFlow(GroupsScreenUiState())
-//    val uiState: StateFlow<GroupsScreenUiState> = _uiState.asStateFlow()
-//
-//    init { loadUserGroups() }
-//
-//    fun loadUserGroups() { /* Fetch groups for current user */ }
-//    fun createGroup(name: String, description: String?) { /* ... */ }
-//    fun joinGroup(groupCode: String) { /* ... */ }
-//    fun showJoinGroupDialog(show: Boolean) { _uiState.update { it.copy(joinGroupDialogVisible = show) } }
-//    fun showCreateGroupDialog(show: Boolean) { _uiState.update { it.copy(createGroupDialogVisible = show) } }
-// }
-// --- End Conceptual ViewModel ---
-
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.flow.collectLatest
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupsScreen(
-    // navController: NavController, // To navigate to individual group details
-    // viewModel: GroupsViewModel = hiltViewModel() // Or your ViewModel provider
-    // For preview, we'll use local state and mock actions
+    viewModel: GroupsViewModel = hiltViewModel(),
     onNavigateToGroupDetails: (groupId: String) -> Unit
 ) {
-    // Simulate ViewModel state for preview
-    var uiState by remember {
-        mutableStateOf(
-            GroupsScreenUiState(
-                userGroups = listOf(
-                    GroupPreview("group1", "Weekend Warriors", 5, "Focusing on weekend projects", "John posted 2h ago"),
-                    GroupPreview("group2", "Daily Coders", 12, "Coding every day challenge!", "Jane completed a task"),
-                    GroupPreview("group3", "Study Buddies", 3, "Preparing for exams", "Activity 5m ago")
-                )
-            )
-        )
-    }
+    val uiState by viewModel.uiState.collectAsState()
     var groupCodeInput by remember { mutableStateOf("") }
     var newGroupNameInput by remember { mutableStateOf("") }
     var newGroupDescriptionInput by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(Unit) {
+        viewModel.uiState.collectLatest { state ->
+            if (state.actionSuccessMessage != null) {
+                snackbarHostState.showSnackbar(
+                    message = state.actionSuccessMessage,
+                    duration = SnackbarDuration.Short
+                )
+                viewModel.clearActionSuccessMessage()
+            }
+            if (state.error != null) {
+                snackbarHostState.showSnackbar(
+                    message = "Ошибка: ${state.error}",
+                    duration = SnackbarDuration.Short
+                )
+                viewModel.clearError() // Option to clear error after showing
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Мои Группы") },
@@ -87,19 +58,18 @@ fun GroupsScreen(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                // No navigation icon needed if this is a top-level screen in bottom nav
             )
         },
         floatingActionButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 FloatingActionButton(
-                    onClick = { uiState = uiState.copy(joinGroupDialogVisible = true) },
+                    onClick = { viewModel.showJoinGroupDialog(true) },
                     containerColor = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Icon(Icons.Filled.GroupAdd, contentDescription = "Присоединиться к группе")
                 }
                 FloatingActionButton(
-                    onClick = { uiState = uiState.copy(createGroupDialogVisible = true) }
+                    onClick = { viewModel.showCreateGroupDialog(true) }
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "Создать группу")
                 }
@@ -116,11 +86,12 @@ fun GroupsScreen(
                     CircularProgressIndicator()
                     Text("Загрузка групп...", modifier = Modifier.padding(top = 60.dp))
                 }
-            } else if (uiState.userGroups.isEmpty()) {
+            } else if (uiState.userGroups.isEmpty() && uiState.error == null) { // Show empty state only if no error
                 Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                     Text(
                         "Вы еще не состоите ни в одной группе. Создайте новую или присоединитесь к существующей!",
                         style = MaterialTheme.typography.bodyLarge,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
@@ -142,26 +113,30 @@ fun GroupsScreen(
         // --- Dialog for Joining a Group ---
         if (uiState.joinGroupDialogVisible) {
             AlertDialog(
-                onDismissRequest = { uiState = uiState.copy(joinGroupDialogVisible = false); groupCodeInput = "" },
+                onDismissRequest = { if (!uiState.isProcessingAction) viewModel.showJoinGroupDialog(false); groupCodeInput = "" },
                 title = { Text("Присоединиться к группе") },
                 text = {
                     OutlinedTextField(
                         value = groupCodeInput,
                         onValueChange = { groupCodeInput = it },
                         label = { Text("Код группы") },
-                        singleLine = true
+                        singleLine = true,
+                        enabled = !uiState.isProcessingAction
                     )
                 },
                 confirmButton = {
-                    Button(onClick = {
-                        // TODO: Call viewModel.joinGroup(groupCodeInput)
-                        println("Attempting to join group with code: $groupCodeInput")
-                        uiState = uiState.copy(joinGroupDialogVisible = false)
-                        groupCodeInput = ""
-                    }) { Text("Присоединиться") }
+                    Button(
+                        onClick = { viewModel.joinGroup(groupCodeInput.trim().uppercase()) },
+                        enabled = !uiState.isProcessingAction && groupCodeInput.isNotBlank()
+                    ) {
+                        if (uiState.isProcessingAction) CircularProgressIndicator(Modifier.size(24.dp)) else Text("Присоединиться")
+                    }
                 },
                 dismissButton = {
-                    TextButton(onClick = { uiState = uiState.copy(joinGroupDialogVisible = false); groupCodeInput = "" }) { Text("Отмена") }
+                    TextButton(
+                        onClick = { viewModel.showJoinGroupDialog(false); groupCodeInput = "" },
+                        enabled = !uiState.isProcessingAction
+                    ) { Text("Отмена") }
                 }
             )
         }
@@ -170,7 +145,7 @@ fun GroupsScreen(
         if (uiState.createGroupDialogVisible) {
             AlertDialog(
                 onDismissRequest = {
-                    uiState = uiState.copy(createGroupDialogVisible = false)
+                    if (!uiState.isProcessingAction) viewModel.showCreateGroupDialog(false)
                     newGroupNameInput = ""
                     newGroupDescriptionInput = ""
                 },
@@ -182,7 +157,8 @@ fun GroupsScreen(
                             onValueChange = { newGroupNameInput = it },
                             label = { Text("Название группы") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !uiState.isProcessingAction
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
@@ -190,25 +166,28 @@ fun GroupsScreen(
                             onValueChange = { newGroupDescriptionInput = it },
                             label = { Text("Описание (необязательно)") },
                             modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3
+                            maxLines = 3,
+                            enabled = !uiState.isProcessingAction
                         )
                     }
                 },
                 confirmButton = {
-                    Button(onClick = {
-                        // TODO: Call viewModel.createGroup(newGroupNameInput, newGroupDescriptionInput)
-                        println("Creating group: $newGroupNameInput, Desc: $newGroupDescriptionInput")
-                        uiState = uiState.copy(createGroupDialogVisible = false)
-                        newGroupNameInput = ""
-                        newGroupDescriptionInput = ""
-                    }) { Text("Создать") }
+                    Button(
+                        onClick = { viewModel.createGroup(newGroupNameInput.trim(), newGroupDescriptionInput.trim()) },
+                        enabled = !uiState.isProcessingAction && newGroupNameInput.isNotBlank()
+                    ) {
+                        if (uiState.isProcessingAction) CircularProgressIndicator(Modifier.size(24.dp)) else Text("Создать")
+                    }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
-                        uiState = uiState.copy(createGroupDialogVisible = false)
-                        newGroupNameInput = ""
-                        newGroupDescriptionInput = ""
-                    }) { Text("Отмена") }
+                    TextButton(
+                        onClick = {
+                            viewModel.showCreateGroupDialog(false)
+                            newGroupNameInput = ""
+                            newGroupDescriptionInput = ""
+                        },
+                        enabled = !uiState.isProcessingAction
+                    ) { Text("Отмена") }
                 }
             )
         }
@@ -216,7 +195,7 @@ fun GroupsScreen(
 }
 
 @Composable
-fun GroupItemCard(group: GroupPreview, onClick: () -> Unit) {
+fun GroupItemCard(group: GroupPreview, onClick: () -> Unit) { // Definition is the same as your stub
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -259,51 +238,58 @@ fun GroupItemCard(group: GroupPreview, onClick: () -> Unit) {
     }
 }
 
-@Preview(showBackground = true, name = "Groups Screen with Data")
-@Composable
-fun GroupsScreenWithDataPreview() {
-    MaterialTheme {
-        GroupsScreen(onNavigateToGroupDetails = {})
-    }
-}
+// --- Previews ---
+//@Preview(showBackground = true, name = "Groups Screen with Data")
+//@Composable
+//fun GroupsScreenWithDataPreview() {
+//    MaterialTheme {
+//        // For preview, we'd ideally pass a mock ViewModel or a UiState directly
+//        // This direct call will use a hiltViewModel if Hilt is setup for previews,
+//        // or fail if not. For simple UI previews, direct state passing is better.
+//        GroupsScreen(
+//            viewModel = MockGroupsViewModel(), // Example of using a mock for preview
+//            onNavigateToGroupDetails = {}
+//        )
+//    }
+//}
+//
+//@Preview(showBackground = true, name = "Groups Screen Empty")
+//@Composable
+//fun GroupsScreenEmptyPreview() {
+//    MaterialTheme {
+//        GroupsScreen(
+//            viewModel = MockGroupsViewModel(initialState = GroupsScreenUiState(userGroups = emptyList())),
+//            onNavigateToGroupDetails = {}
+//        )
+//    }
+//}
 
-@Preview(showBackground = true, name = "Groups Screen Empty")
-@Composable
-fun GroupsScreenEmptyPreview() {
-    MaterialTheme {
-        // To preview empty state, we'd need to modify the state passed or the default in GroupsScreen
-        // For simplicity, this preview will show the same as above unless state is directly manipulated here.
-        // A better way for previews is to pass the uiState directly.
-        val emptyState = GroupsScreenUiState(userGroups = emptyList())
-        // This requires GroupsScreen to accept uiState as a parameter for preview purposes
-        // For now, this preview will render the default state of the GroupsScreen.
-        GroupsScreen(onNavigateToGroupDetails = {})
-        // To actually show empty state, you'd do something like:
-        // GroupsScreenComposable(uiState = GroupsScreenUiState(userGroups = emptyList()), onNavigate... = {})
-        // where GroupsScreenComposable is the inner content part of GroupsScreen.
-    }
-}
-
-@Preview(showBackground = true, name = "Join Group Dialog")
-@Composable
-fun JoinGroupDialogPreview() {
-    MaterialTheme {
-        // Simulate dialog being visible
-        val uiState = GroupsScreenUiState(joinGroupDialogVisible = true)
-        // This preview focuses on the dialog itself, not the full screen logic.
-        // You'd typically preview dialogs in isolation.
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("Присоединиться к группе") },
-            text = {
-                OutlinedTextField(
-                    value = "ABC-123",
-                    onValueChange = { },
-                    label = { Text("Код группы") }
-                )
-            },
-            confirmButton = { Button(onClick = {}) { Text("Присоединиться") } },
-            dismissButton = { TextButton(onClick = {}) { Text("Отмена") } }
-        )
-    }
-}
+// A simple Mock ViewModel for Previews
+//class MockGroupsViewModel(initialState: GroupsScreenUiState = GroupsScreenUiState(
+//    userGroups = listOf(
+//        GroupPreview("group1", "Weekend Warriors", 5, "Focusing on weekend projects", "John posted 2h ago"),
+//        GroupPreview("group2", "Daily Coders", 12, "Coding every day challenge!", "Jane completed a task"),
+//    )
+//)) : GroupsViewModel(authService = object: AuthService { // Mock AuthService
+//    override fun getCurrentUserId(): String? = "previewUser"
+//    override fun isUserLoggedIn(): kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.flowOf(true)
+//    override suspend fun signIn(email: String, password: String): Result<Unit> = Result.Success(Unit)
+//    override suspend fun signUp(email: String, password: String): Result<String?> = Result.Success("previewUser")
+//    override suspend fun signOut(): Result<Unit> = Result.Success(Unit)
+//    override suspend fun getCurrentUserEmail(): String? = "preview@example.com"
+//}, groupRepository = object : GroupRepository { // Mock GroupRepository
+//    override suspend fun getGroupById(groupId: String): Result<GroupData?> = Result.Success(null)
+//    override suspend fun getGroupsForUser(userId: String): Result<List<GroupData>> = Result.Success(emptyList())
+//    override suspend fun insertGroup(group: GroupData): Result<String> = Result.Success("newGroupId")
+//    override suspend fun updateGroup(group: GroupData): Result<Unit> = Result.Success(Unit)
+//    override suspend fun removeUserFromGroup(groupId: String, userId: String): Result<Unit> = Result.Success(Unit)
+//    override suspend fun addUserToGroup(groupId: String, userId: String): Result<Unit> = Result.Success(Unit)
+//    override suspend fun findGroupByCode(groupCode: String): Result<GroupData?> = Result.Success(null)
+//}) {
+//    init {
+//        _uiState.value = initialState
+//    }
+//    override fun loadUserGroups() {} // No-op for mock
+//    override fun createGroup(name: String, description: String?) {} // No-op
+//    override fun joinGroup(groupCodeToJoin: String) {} // No-op
+//}

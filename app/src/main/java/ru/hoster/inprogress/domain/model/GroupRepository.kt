@@ -9,6 +9,7 @@ interface GroupRepository {
     suspend fun updateGroup(group: GroupData): Result<Unit>
     suspend fun removeUserFromGroup(groupId: String, userId: String): Result<Unit>
     suspend fun addUserToGroup(groupId: String, userId: String): Result<Unit> // Новый полезный метод
+    suspend fun findGroupByCode(groupCode: String): Result<GroupData?>
     // Можно добавить другие методы:
     // suspend fun deleteGroup(groupId: String): Result<Unit>
     // suspend fun findGroupByCode(groupCode: String): Result<GroupData?>

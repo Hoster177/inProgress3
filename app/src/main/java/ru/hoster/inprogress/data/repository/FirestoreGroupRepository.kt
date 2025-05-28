@@ -88,4 +88,22 @@ class FirestoreGroupRepository @Inject constructor(
             Result.Error(e)
         }
     }
+
+    override suspend fun findGroupByCode(groupCode: String): Result<GroupData?> {
+        return try {
+            val querySnapshot = firestore.collection(GROUPS_COLLECTION)
+                .whereEqualTo("groupCode", groupCode.uppercase()) // Store and query codes in uppercase for case-insensitivity
+                .limit(1)
+                .get()
+                .await()
+            if (querySnapshot.isEmpty) {
+                Result.Success(null)
+            } else {
+                val group = querySnapshot.documents.firstNotNullOfOrNull { it.toObject(GroupData::class.java) }
+                Result.Success(group)
+            }
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
 }

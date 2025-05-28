@@ -111,6 +111,10 @@ class FakeGroupRepository : GroupRepository {
         TODO("Not yet addUserToGroup")
     }
 
+    override suspend fun findGroupByCode(groupCode: String): Result<GroupData?> {
+        TODO("Not yet implemented")
+    }
+
     // --- Helper methods for testing ---
     fun clearGroups() {
         groups.clear()

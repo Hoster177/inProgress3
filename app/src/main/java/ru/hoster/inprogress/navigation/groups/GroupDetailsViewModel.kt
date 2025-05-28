@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.hoster.inprogress.data.local.TimerSessionDao
+import ru.hoster.inprogress.navigation.formatDurationViewModel
+import java.util.Calendar
+import java.util.Date
 import javax.inject.Inject
 
 // --- UI-специфичные модели и Navigation Signal ---
@@ -28,7 +32,8 @@ data class MemberDisplay(
     val userId: String,
     val displayName: String,
     val avatarUrl: String?,
-    val isAdmin: Boolean
+    val isAdmin: Boolean,
+    val todayTrackedTimeFormatted: String? = null // New field
 )
 
 data class GroupDetailsScreenUiState(
@@ -54,7 +59,8 @@ class GroupDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val groupRepository: GroupRepository,
     private val userRepository: UserRepository,
-    private val authService: AuthService
+    private val authService: AuthService,
+    private val timerSessionDao: TimerSessionDao
 ) : ViewModel() {
 
     private val groupId: String = savedStateHandle.get<String>("groupId")!!
@@ -76,9 +82,9 @@ class GroupDetailsViewModel @Inject constructor(
     fun loadGroupDetails() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val currentUserIdFromState = _uiState.value.currentUserId
+            val currentUserIdFromState = _uiState.value.currentUserId // Ensure currentUserId is loaded in init
             if (currentUserIdFromState == null) {
-                _uiState.update { it.copy(isLoading = false, error = "User not authenticated (from state).") }
+                _uiState.update { it.copy(isLoading = false, error = "User not authenticated.") }
                 return@launch
             }
 
@@ -95,35 +101,45 @@ class GroupDetailsViewModel @Inject constructor(
 
                     if (groupData.memberUserIds.isNotEmpty()) {
                         val memberIdsToFetch = if (groupData.memberUserIds.size > 30) {
-                            println("Warning: Fetching only first 30 members out of ${groupData.memberUserIds.size}")
+                            _uiState.update { it.copy(error = "Отображаются первые 30 участников.")} // Optional: Inform user if list is truncated
                             groupData.memberUserIds.take(30)
                         } else {
                             groupData.memberUserIds
                         }
 
-                        if (memberIdsToFetch.isEmpty() && groupData.memberUserIds.isNotEmpty()){
-                            _uiState.update {
-                                it.copy(
-                                    group = groupDisplay,
-                                    members = emptyList(),
-                                    isCurrentUserAdmin = isAdmin,
-                                    isLoading = false,
-                                    error = if(groupData.memberUserIds.size > 30) "Too many members to fetch all details at once." else null
-                                )
-                            }
-                            return@launch
-                        }
-
-
                         when (val membersResult = userRepository.getUsersByIds(memberIdsToFetch)) {
                             is Result.Success -> {
-                                val memberDisplays = membersResult.data.map { userData ->
-                                    userData.toMemberDisplay(isAdmin = userData.userId == groupData.adminUserId)
+                                val memberUserDataList = membersResult.data
+
+                                // --- START OF NEW LOGIC FOR TRACKED TIME ---
+                                val todayStart = getStartOfDay(Date())
+                                val todayEnd = getEndOfDay(Date())
+
+                                val memberDisplaysWithTime = memberUserDataList.map { userData ->
+                                    // You need a way to get sessions. This assumes a non-Flow, direct DAO call.
+                                    // If your DAO returns Flow, you'd need a more complex collection strategy here,
+                                    // possibly by fetching all sessions for all members in one go if feasible,
+                                    // or collecting flows individually (which can be resource-intensive).
+                                    val sessions = timerSessionDao.getSessionsForDateRange(
+                                        userId = userData.userId,
+                                        fromDate = todayStart,
+                                        toDate = todayEnd
+                                    )
+                                    val totalMillisToday = sessions.sumOf { session ->
+                                        // Ensure endTime is not null for completed sessions
+                                        (session.endTime?.time ?: session.startTime.time) - session.startTime.time
+                                    }
+                                    userData.toMemberDisplay( // Pass the calculated time to the mapper
+                                        isAdmin = userData.userId == groupData.adminUserId,
+                                        todayTrackedTimeMillis = totalMillisToday
+                                    )
                                 }
+                                // --- END OF NEW LOGIC FOR TRACKED TIME ---
+
                                 _uiState.update {
                                     it.copy(
                                         group = groupDisplay,
-                                        members = memberDisplays,
+                                        members = memberDisplaysWithTime, // Use the updated list
                                         isCurrentUserAdmin = isAdmin,
                                         isLoading = false
                                     )
@@ -135,13 +151,12 @@ class GroupDetailsViewModel @Inject constructor(
                                         group = groupDisplay,
                                         isCurrentUserAdmin = isAdmin,
                                         isLoading = false,
-                                        // Corrected: Use .message.message
-                                        error = "Failed to load members: ${membersResult.message.message}"
+                                        error = "Failed to load members: ${membersResult.message.localizedMessage}"
                                     )
                                 }
                             }
                         }
-                    } else {
+                    } else { // No members in the group
                         _uiState.update {
                             it.copy(
                                 group = groupDisplay,
@@ -154,8 +169,7 @@ class GroupDetailsViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        // Corrected: Use .message.message
-                        it.copy(isLoading = false, error = "Failed to load group: ${groupResult.message.message}")
+                        it.copy(isLoading = false, error = "Failed to load group: ${groupResult.message.localizedMessage}")
                     }
                 }
             }
@@ -220,12 +234,37 @@ class GroupDetailsViewModel @Inject constructor(
         )
     }
 
-    private fun ru.hoster.inprogress.domain.model.UserData.toMemberDisplay(isAdmin: Boolean): MemberDisplay {
+    private fun ru.hoster.inprogress.domain.model.UserData.toMemberDisplay(
+        isAdmin: Boolean,
+        todayTrackedTimeMillis: Long // ADDED parameter
+    ): MemberDisplay {
         return MemberDisplay(
             userId = this.userId,
             displayName = this.displayName,
             avatarUrl = this.avatarUrl,
-            isAdmin = isAdmin
+            isAdmin = isAdmin,
+            // ADDED: Format the time using your utility function
+            todayTrackedTimeFormatted = formatDurationViewModel(todayTrackedTimeMillis, forceHours = false)
         )
+    }
+
+    private fun getStartOfDay(date: Date): Date {
+        return Calendar.getInstance().apply {
+            time = date
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.time
+    }
+
+    private fun getEndOfDay(date: Date): Date {
+        return Calendar.getInstance().apply {
+            time = date
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.time
     }
 }
