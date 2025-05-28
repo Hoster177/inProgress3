@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons // Required for Material Icons
+import androidx.compose.material.icons.filled.Settings // Required for the Settings icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource // For drawable resources
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,7 +36,7 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    // val context = LocalContext.current // context is used in AvatarImage, so it's fine
 
     LaunchedEffect(Unit) {
         viewModel.uiState.collectLatest { state ->
@@ -63,7 +64,15 @@ fun ProfileScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                ),
+                actions = { // Add actions for the TopAppBar
+                    IconButton(onClick = onNavigateToUserSettings) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Общие настройки"
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -113,13 +122,12 @@ fun ProfileScreen(
                         Text("Сохранить изменения")
                     }
                 }
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp)) // Increased spacing a bit
 
-                // Navigation Buttons
-                Text("Настройки и информация", style = MaterialTheme.typography.titleLarge)
+                // Navigation Buttons (excluding "Общие настройки")
+                Text("Дополнительная информация", style = MaterialTheme.typography.titleSmall) // Changed style for hierarchy
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onNavigateToUserSettings, modifier = Modifier.fillMaxWidth()) { Text("Общие настройки") }
-                Spacer(modifier = Modifier.height(8.dp))
+                // Button for "Общие настройки" is now removed from here
                 Button(onClick = onNavigateToAchievements, modifier = Modifier.fillMaxWidth()) { Text("Достижения") }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(onClick = onNavigateToHelp, modifier = Modifier.fillMaxWidth()) { Text("Справка (FAQ)") }
@@ -170,11 +178,6 @@ fun AvatarSection(
 
 @Composable
 fun AvatarImage(avatarId: String, modifier: Modifier = Modifier) {
-    // In a real app, you'd load these from drawable resources or network
-    // For now, we'll use placeholder logic.
-    // Create dummy drawable resources named: avatar_1.png, avatar_2.png, etc. in your res/drawable folder.
-    // Or use a library like Coil for network images.
-
     val context = LocalContext.current
     val resourceId = remember(avatarId) {
         context.resources.getIdentifier(avatarId, "drawable", context.packageName)
@@ -184,11 +187,10 @@ fun AvatarImage(avatarId: String, modifier: Modifier = Modifier) {
         Image(
             painter = painterResource(id = resourceId),
             contentDescription = "Аватар $avatarId",
-            modifier = modifier.clip(CircleShape), // Ensure it's clipped if not already
+            modifier = modifier.clip(CircleShape),
             contentScale = ContentScale.Crop
         )
     } else {
-        // Fallback if avatar resource not found
         Box(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
@@ -200,12 +202,11 @@ fun AvatarImage(avatarId: String, modifier: Modifier = Modifier) {
     }
 }
 
-// Preview needs to be updated or simplified as ViewModel is complex for preview
+@OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
 fun ProfileScreenPreview() {
     MaterialTheme {
-        // Mocking a simple state for preview without Hilt ViewModel
         val previewState = ProfileScreenUiState(
             currentName = "Тестовый Пользователь",
             editableName = "Тестовый Пользователь",
@@ -213,33 +214,54 @@ fun ProfileScreenPreview() {
             currentAvatarId = "avatar_1",
             selectedAvatarId = "avatar_1"
         )
-        // This preview won't have ViewModel logic, just static UI.
-        // For full preview, you'd need to provide a mock ViewModel.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            AvatarSection(
-                selectedAvatarId = previewState.selectedAvatarId,
-                predefinedAvatars = listOf("avatar_1", "avatar_2", "avatar_3", "avatar_default"),
-                onAvatarSelected = {}
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = previewState.editableName,
-                onValueChange = {},
-                label = { Text("Имя пользователя") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Email: ${previewState.email}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = {}) { Text("Сохранить изменения") }
+        Scaffold( // Added Scaffold to preview TopAppBar action
+            topBar = {
+                TopAppBar(
+                    title = { Text("Профиль") },
+                    actions = {
+                        IconButton(onClick = { /* For preview */ }) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Общие настройки"
+                            )
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                AvatarSection(
+                    selectedAvatarId = previewState.selectedAvatarId,
+                    predefinedAvatars = listOf("avatar_1", "avatar_2", "avatar_3", "avatar_default"),
+                    onAvatarSelected = {}
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = previewState.editableName,
+                    onValueChange = {},
+                    label = { Text("Имя пользователя") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Email: ${previewState.email}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(onClick = {}) { Text("Сохранить изменения") }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("Дополнительная информация", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { }, modifier = Modifier.fillMaxWidth()) { Text("Достижения") }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = { }, modifier = Modifier.fillMaxWidth()) { Text("Справка (FAQ)") }
+            }
         }
     }
 }
