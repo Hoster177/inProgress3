@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
                         composable(Route.STATISTICS) {
                             val viewModel: StatsViewModel = hiltViewModel()
                             StatsScreen(
-                                viewModel = viewModel
+                                dailyViewModel = viewModel
                             )
                         }
                         composable(

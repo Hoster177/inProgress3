@@ -31,4 +31,5 @@ interface ActivityRepository {
 
     suspend fun getAllActivities(userId: String): List<ActivityItem> // Новый метод для получения всех активностей
 
+
 }
