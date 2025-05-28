@@ -46,7 +46,7 @@ class FakeActivityRepository : ActivityRepository {
         activities[activity.id] = activity
     }
 
-    override fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>> {
+    override fun getEnrichedActivitiesFlow(): Flow<List<ActivityItem>> {
         TODO("Not yet implemented")
     }
 

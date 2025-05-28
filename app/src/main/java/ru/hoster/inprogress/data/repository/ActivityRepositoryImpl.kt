@@ -227,13 +227,14 @@ class ActivityRepositoryImpl @Inject constructor(
         )
     }
 
-    override fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>> { // Возвращаем List<ActivityItem>
+    override fun getEnrichedActivitiesFlow(): Flow<List<ActivityItem>> {
         val currentUserId = authService.getCurrentUserId()
         if (currentUserId == null) {
-            Log.w("ActivityRepo", "getActivitiesForTodayFlow: No current user ID. Returning empty list.")
+            Log.w("ActivityRepo", "getEnrichedActivitiesFlow: No current user ID. Returning empty list.")
             return flowOf(emptyList())
         }
 
+        // Даты для получения сессий ТОЛЬКО ЗА СЕГОДНЯ
         val calendar = Calendar.getInstance()
         val todayStartDate = calendar.apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -242,72 +243,48 @@ class ActivityRepositoryImpl @Inject constructor(
             set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
         }.time
 
-        Log.d("ActivityRepo", "getActivitiesForTodayFlow for user '$currentUserId', DateRange: $todayStartDate - $todayEndDate")
+        Log.d("ActivityRepo", "getEnrichedActivitiesFlow for user '$currentUserId'. Sessions will be fetched for today: $todayStartDate - $todayEndDate")
 
-        // 1. Получаем базовый Flow активностей пользователя
-        val baseActivitiesFlow = activityDao.getActivitiesForUserFlow(currentUserId)
-            .map { activities -> // Фильтруем по дате создания, если это все еще актуально
-                activities.filter { activity ->
-                    activity.createdAt.time >= todayStartDate.time && activity.createdAt.time <= todayEndDate.time
-                }
-            }
+        // 1. Получаем Flow ВСЕХ активностей пользователя (без фильтра по дате создания)
+        // Предполагается, что activityDao.getAllActivitiesFlowForUser(currentUserId) возвращает все активности.
+        // Если вы использовали getActivitiesForUserFlow, убедитесь, что он не содержит фильтра по дате.
+        val allUserActivitiesFlow = activityDao.getAllActivitiesFlowForUser(currentUserId) // ИЗМЕНЕНО ЗДЕСЬ
+            .onEach { Log.d("ActivityRepo", "Base activities flow emitted ${it.size} activities for user $currentUserId.") }
 
-        // 2. Получаем Flow всех сессий пользователя за сегодня
+
+        // 2. Получаем Flow сессий пользователя ТОЛЬКО ЗА СЕГОДНЯ
         val todaySessionsFlow = timerSessionDao.getSessionsForDateRangeFlow(currentUserId, todayStartDate, todayEndDate)
+            .onEach { Log.d("ActivityRepo", "Today's sessions flow emitted ${it.size} sessions for user $currentUserId.") }
 
         // 3. Комбинируем эти два Flow
-        return combine(baseActivitiesFlow, todaySessionsFlow) { activities, allTodaySessions ->
-            Log.d("ActivityRepo_Combine", "Combining ${activities.size} activities with ${allTodaySessions.size} total sessions for today.")
-            activities.map { activity ->
-                // Для каждой активности находим ее сессии из общего списка сессий за сегодня
-                val sessionsForThisActivity = allTodaySessions.filter { it.activityId == activity.id }
+        return combine(allUserActivitiesFlow, todaySessionsFlow) { allActivities, todaySessions ->
+            Log.d("ActivityRepo_Combine", "Combining ${allActivities.size} total activities with ${todaySessions.size} sessions for today.")
 
-                val activeSession = sessionsForThisActivity.find { it.endTime == null }
-                val isActive = activeSession != null
-                val activeSessionStartTimeMillis = activeSession?.startTime?.time
+            allActivities.map { activity ->
+                // Для каждой активности находим ее сессии из списка сессий ЗА СЕГОДНЯ
+                val sessionsForThisActivityToday = todaySessions.filter { it.activityId == activity.id }
 
-                val completedSessionsDuration = sessionsForThisActivity
+                val activeSessionToday = sessionsForThisActivityToday.find { it.endTime == null }
+                val isActiveToday = activeSessionToday != null
+
+                val completedSessionsDurationToday = sessionsForThisActivityToday
                     .filter { it.endTime != null }
                     .sumOf { session ->
                         val duration = (session.endTime?.time ?: 0L) - session.startTime.time
                         if (duration > 0) duration else 0L
                     }
 
-                // totalDurationMillisToday теперь будет суммой завершенных + длительность активной (если есть) до текущего момента
-                // Это поле становится менее важным, если ViewModel будет отдельно управлять тикающим таймером.
-                // Но для инициализации и для неактивных задач оно полезно.
-                var totalDurationToday = completedSessionsDuration
-                if (isActive && activeSessionStartTimeMillis != null) {
-                    // Длительность активной сессии до "сейчас" (момента обработки в репозитории)
-                    totalDurationToday += (System.currentTimeMillis() - activeSessionStartTimeMillis)
-                }
+                Log.v("ActivityRepo_Enrich", "Enriching Activity: '${activity.name}' (ID ${activity.id}), " +
+                        "IsActiveToday: $isActiveToday, CompletedDurationToday: $completedSessionsDurationToday")
 
-                Log.d("ActivityRepo_Enrich", "Enriched Activity: '${activity.name}' (ID ${activity.id}), " +
-                        "IsActive: $isActive, CompletedDuration: $completedSessionsDuration, " +
-                        "ActiveSessionStart: $activeSessionStartTimeMillis, TotalDurationInRepo: $totalDurationToday")
-
-                // Здесь мы обновляем поля самого ActivityItem.
-                // Если ActivityItem неизменяемый, то нужно создавать новый POJO (EnrichedActivityItem).
-                // Для простоты предположим, что ActivityItem может быть скопирован с новыми значениями.
                 activity.copy(
-                    isActive = isActive,
-                    // Это поле будет базой для ViewModel. ViewModel добавит к нему тикающую часть.
-                    totalDurationMillisToday = completedSessionsDuration,
-                    // Дополнительные поля, если вы их добавили в ActivityItem:
-                    // totalDurationOfCompletedSessionsMillis = completedSessionsDuration,
-                    // activeSessionStartTimeMillis = activeSessionStartTimeMillis
-
-                    // Если в ActivityItem нет таких полей, то totalDurationMillisToday
-                    // должно быть суммой завершенных сессий, а isActive и activeSessionStartTimeMillis
-                    // используются ViewModel для управления тикающим таймером.
-                    // Давайте остановимся на том, что totalDurationMillisToday = completedSessionsDuration
-                    // А isActive и activeSessionStartTimeMillis будут использоваться ViewModel.
-                    // Это более чистый подход.
+                    isActive = isActiveToday,
+                    totalDurationMillisToday = completedSessionsDurationToday
                 )
-            }
+            }.sortedWith(compareByDescending<ActivityItem> { it.isActive }.thenBy { it.name }) // Сортировка: активные сегодня вверху, затем по имени
         }
             .onEach { enrichedActivities ->
-                Log.i("ActivityRepo_Final", "getActivitiesForTodayFlow: Emitting ${enrichedActivities.size} enriched activities.")
+                Log.i("ActivityRepo_Final", "getEnrichedActivitiesFlow: Emitting ${enrichedActivities.size} enriched activities for MainScreen.")
             }
     }
 

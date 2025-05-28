@@ -19,7 +19,7 @@ data class ActivityData(
 )
 
 interface ActivityRepository {
-    fun getActivitiesForTodayFlow(): Flow<List<ActivityItem>>
+    fun getEnrichedActivitiesFlow(): Flow<List<ActivityItem>>
     suspend fun getActivityById(id: String): ActivityItem?
     suspend fun deleteActivity(id: String)
     suspend fun updateActivity(activity: ActivityItem) // Для обновления isActive и т.д.

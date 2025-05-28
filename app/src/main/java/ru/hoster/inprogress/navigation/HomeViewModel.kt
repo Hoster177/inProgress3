@@ -1,6 +1,5 @@
 package ru.hoster.inprogress.navigation // Убедись, что пакет правильный
 
-import android.app.Application
 // import android.content.Intent // No longer needed for TimerService direct calls
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -88,85 +87,96 @@ class HomeViewModel @Inject constructor(
     private fun getCurrentUserId(): String? = authService.getCurrentUserId()
 
     init {
-        loadBaseData() // Переименовал для ясности
+        // loadBaseData() // Можно убрать, если вся логика в combine ниже
 
         viewModelScope.launch {
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                _uiState.value = MainScreenUiState(isLoading = false, errorMessage = "Пользователь не авторизован")
+                return@launch
+            }
+
+            // Подписка на тикающий таймер из TimerService (остается без изменений)
             timerService.activeTimerFlow
                 //.distinctUntilChanged()
-                .collect { activeTimerInfo: ActiveTimerInfo? ->
+                .onEach { activeTimerInfo: ActiveTimerInfo? ->
                     _uiState.update { currentState ->
                         if (activeTimerInfo != null) {
-                            Log.d("HomeVM_Ticker", "TimerService emitted: ActID=${activeTimerInfo.activityId}, Duration=${activeTimerInfo.currentDurationMillis}, StartTime=${activeTimerInfo.startTime}")
+                            Log.d("HomeVM_Ticker", "TimerService Tick: ActID=${activeTimerInfo.activityId}, Duration=${activeTimerInfo.currentDurationMillis}")
                             currentState.copy(
                                 currentlyTimingActivityId = activeTimerInfo.activityId,
                                 currentlyTimingActivityStartTime = activeTimerInfo.startTime,
-                                currentlyTickingDurationMillis = activeTimerInfo.currentDurationMillis,
-                                activities = currentState.activities.map { actUi ->
-                                    actUi.copy(isCurrentlyActive = actUi.baseActivity.id == activeTimerInfo.activityId)
-                                }
-                                // dailyTotalTimeFormatted будет пересчитан ниже, если нужно
+                                currentlyTickingDurationMillis = activeTimerInfo.currentDurationMillis
+                                // Не обновляем список activities здесь напрямую, это сделает combine ниже
                             )
                         } else {
-                            Log.d("HomeVM_Ticker", "TimerService emitted: No active timer.")
+                            Log.d("HomeVM_Ticker", "TimerService Tick: No active timer.")
                             currentState.copy(
                                 currentlyTimingActivityId = null,
                                 currentlyTimingActivityStartTime = null,
-                                currentlyTickingDurationMillis = 0L,
-                                activities = currentState.activities.map { actUi ->
-                                    actUi.copy(isCurrentlyActive = false)
-                                }
+                                currentlyTickingDurationMillis = 0L
                             )
                         }
                     }
-                }
-        }
+                }.launchIn(viewModelScope) // Запускаем этот Flow отдельно
 
-        // Комбинированный Flow для обновления activitiesUi и dailyTotalTimeFormatted
-        // Он будет реагировать на изменения из репозитория И на изменения тикающего таймера
-        viewModelScope.launch {
+            // Комбинированный Flow для обновления activitiesUi и dailyTotalTimeFormatted
             combine(
-                activityRepository.getActivitiesForTodayFlow(), // Эмитит List<ActivityItem>
+                activityRepository.getEnrichedActivitiesFlow(), // Используем новый метод
                 _uiState.map { it.currentlyTimingActivityId }.distinctUntilChanged(),
-                _uiState.map { it.currentlyTimingActivityStartTime }.distinctUntilChanged(),
+                // _uiState.map { it.currentlyTimingActivityStartTime }.distinctUntilChanged(), // startTime не нужен для displayDuration, если есть tickingDuration
                 _uiState.map { it.currentlyTickingDurationMillis }.distinctUntilChanged()
-            ) { activitiesFromRepo, timingActivityId, timingStartTime, tickingDuration ->
+            ) { activitiesFromRepo, timingActivityId, tickingDuration ->
 
-                Log.d("HomeVM_UI_Updater", "UI Updater triggered. Repo activities: ${activitiesFromRepo.size}, TimingID: $timingActivityId, TickingDuration: $tickingDuration")
+                Log.d("HomeVM_UI_Updater", "UI Updater: Repo activities: ${activitiesFromRepo.size}, TimingID: $timingActivityId, TickingDuration: $tickingDuration")
 
                 val activitiesUi = activitiesFromRepo.map { repoActivity ->
-                    var displayDuration = repoActivity.totalDurationMillisToday // Это сумма завершенных сессий из репо
-                    val isActiveNow = repoActivity.id == timingActivityId
+                    // repoActivity.totalDurationMillisToday - это сумма завершенных сессий ЗА СЕГОДНЯ из репозитория
+                    // repoActivity.isActive - активна ли сессия ЗА СЕГОДНЯ по данным репозитория (на момент последнего чтения БД)
+                    var displayDurationToday = repoActivity.totalDurationMillisToday
+                    val isActiveNowByTimer = repoActivity.id == timingActivityId // Активна ли СЕЙЧАС по данным TimerService
 
-                    if (isActiveNow && timingStartTime != null) {
-                        // Убедимся, что startTime из repoActivity (если бы оно там было)
-                        // совпадает с timingStartTime. Но проще полагаться на timingStartTime.
-                        // Длительность текущей активной сессии уже есть в tickingDuration.
-                        displayDuration += tickingDuration
+                    if (isActiveNowByTimer) {
+                        // Если эта задача сейчас тикает, ее displayDuration - это сумма завершенных СЕГОДНЯ + текущая тикающая сессия
+                        displayDurationToday += tickingDuration
                     }
+                    // Если задача не тикает СЕЙЧАС (isActiveNowByTimer = false),
+                    // то displayDurationToday остается суммой ее завершенных сессий за сегодня.
 
                     ActivityItemUi(
                         baseActivity = repoActivity,
-                        displayDurationMillis = displayDuration,
-                        displayDurationFormatted = formatDurationViewModel(displayDuration),
-                        isCurrentlyActive = isActiveNow
+                        displayDurationMillis = displayDurationToday,
+                        displayDurationFormatted = formatDurationViewModel(displayDurationToday),
+                        isCurrentlyActive = isActiveNowByTimer // Приоритет у TimerService для "isCurrentlyActive"
                     )
                 }
 
+                // dailyTotalTimeFormatted - это сумма displayDurationToday всех активностей
                 val dailyTotalMillis = activitiesUi.sumOf { it.displayDurationMillis }
+
+                // Обновляем цели отдельно, если они не зависят от этого combine
+                // val currentGoals = _uiState.value.goals (если не хотим их перезагружать здесь)
 
                 _uiState.update { current ->
                     current.copy(
+                        currentDate = getCurrentDateStringViewModel(), // Обновляем дату на всякий случай
                         activities = activitiesUi,
                         dailyTotalTimeFormatted = formatDurationViewModel(dailyTotalMillis, forceHours = true),
-                        isLoading = false, // Предполагаем, что загрузка завершена, если есть данные из репо
+                        isLoading = false,
                         errorMessage = null
+                        // goals = currentGoals // или загружаем их здесь, если нужно
                     )
                 }
-
             }.catch { throwable ->
                 Log.e("HomeVM_UI_Updater", "Error in UI Updater combine: ${throwable.message}", throwable)
                 _uiState.update { it.copy(isLoading = false, errorMessage = throwable.message) }
-            }.collect() // Просто collect, т.к. обновление идет через _uiState.update
+            }.launchIn(viewModelScope) // Запускаем и этот Flow
+
+            // Загрузка целей (можно оставить здесь или объединить в один большой combine, если они зависят от userId)
+            goalRepository.getActiveGoalsFlow() // Предполагается, что он внутренне использует userId
+                .onEach { goals -> _uiState.update { it.copy(goals = goals) } }
+                .catch { e -> _uiState.update { it.copy(errorMessage = e.message) } }
+                .launchIn(viewModelScope)
         }
     }
 
@@ -178,7 +188,7 @@ class HomeViewModel @Inject constructor(
             Log.d("HomeVM", "loadInitialData called for user: $userId")
             // Используем combine для получения базовых данных и данных о текущем таймере
             combine(
-                activityRepository.getActivitiesForTodayFlow(),
+                activityRepository.getEnrichedActivitiesFlow(),
                 goalRepository.getActiveGoalsFlow()
                 // timerService.activeTimerFlow // Можно и здесь, но тогда combine будет срабатывать каждую секунду.
                 // Лучше отдельный collect для activeTimerFlow, как сделано выше.

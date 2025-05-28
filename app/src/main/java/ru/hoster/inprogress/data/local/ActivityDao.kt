@@ -18,9 +18,7 @@ interface ActivityDao {
     @Delete
     suspend fun deleteActivity(activity: ActivityItem) // Deletes based on Primary Key 'id'
 
-    // Specific getters
-    @Query("SELECT * FROM activity_items WHERE id = :localId LIMIT 1")
-    suspend fun getActivityByLocalId(localId: Long): ActivityItem?
+
 
     @Query("SELECT * FROM activity_items WHERE firebaseId = :firebaseId LIMIT 1")
     suspend fun getActivityByFirebaseId(firebaseId: String): ActivityItem?
@@ -34,10 +32,17 @@ interface ActivityDao {
     @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY createdAt DESC")
     fun getActivitiesForUserFlow(userId: String): Flow<List<ActivityItem>>
 
-    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY name ASC") // Или другая сортировка
-    suspend fun getAllActivitiesList(userId: String): List<ActivityItem> // Для однократного получения списка
 
+    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY name ASC") // Или ORDER BY lastUsedAt DESC, если такое поле есть
+    fun getAllActivitiesFlowForUser(userId: String): Flow<List<ActivityItem>>
 
+    // Этот метод остается, если он используется где-то еще или для getAllActivities (suspend)
+    @Query("SELECT * FROM activity_items WHERE userId = :userId ORDER BY name ASC")
+    suspend fun getAllActivitiesList(userId: String): List<ActivityItem>
+
+    // Метод для получения активности по ее локальному ID (Long)
+    @Query("SELECT * FROM activity_items WHERE id = :id")
+    suspend fun getActivityByLocalId(id: Long): ActivityItem?
     // Unused/Duplicate DAO methods to consider removing:
     // @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertOrReplaceActivity(activity: ActivityItem): Long // Duplicate of insertActivity
     // @Query("DELETE FROM activity_items WHERE id = :activityId") suspend fun deleteActivityById(activityId: Long) // Covered by @Delete if you fetch item first
