@@ -42,4 +42,6 @@ interface TimerSessionDao {
     // Если нужен не Flow, а просто suspend функция для однократного получения:
     @Query("SELECT * FROM timer_sessions WHERE userId = :userId AND startTime BETWEEN :fromDate AND :toDate ORDER BY startTime DESC")
     suspend fun getSessionsForDateRange(userId: String, fromDate: Date, toDate: Date): List<TimerSession>
+
+
 }

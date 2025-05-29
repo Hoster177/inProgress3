@@ -179,11 +179,11 @@ fun GroupDetailsScreen(
                     }
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Активность группы (TODO)", style = MaterialTheme.typography.titleLarge)
-                    Text("Здесь будет лента активности группы или общие задачи.", style = MaterialTheme.typography.bodyMedium)
-                }
+//                item {
+//                    Spacer(modifier = Modifier.height(16.dp))
+//                    Text("Активность группы (TODO)", style = MaterialTheme.typography.titleLarge)
+//                    Text("Здесь будет лента активности группы или общие задачи.", style = MaterialTheme.typography.bodyMedium)
+//                }
             }
         } else { // Fallback if group is null and not loading, and no specific error shown above
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp), contentAlignment = Alignment.Center) {

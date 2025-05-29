@@ -221,13 +221,13 @@ fun GroupItemCard(group: GroupPreview, onClick: () -> Unit) { // Definition is t
                     "Участников: ${group.memberCount}",
                     style = MaterialTheme.typography.bodySmall
                 )
-                if (group.lastActivity != null) {
-                    Text(
-                        "Активность: ${group.lastActivity}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+//                if (group.lastActivity != null) {
+//                    Text(
+//                        "Активность: ${group.lastActivity}",
+//                        style = MaterialTheme.typography.bodySmall,
+//                        color = MaterialTheme.colorScheme.onSurfaceVariant
+//                    )
+//                }
             }
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowRight,

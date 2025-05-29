@@ -196,7 +196,7 @@ fun CalendarDayCell(dayStat: CalendarDayStat) {
             .padding(2.dp)
             .border(1.dp, borderColor)
             .background(backgroundColor)
-            .padding(4.dp),
+            .padding(2.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

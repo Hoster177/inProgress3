@@ -125,9 +125,11 @@ class GroupDetailsViewModel @Inject constructor(
                                         fromDate = todayStart,
                                         toDate = todayEnd
                                     )
+                                    val currentTimeMillis = System.currentTimeMillis() // Get the current time once
+
                                     val totalMillisToday = sessions.sumOf { session ->
-                                        // Ensure endTime is not null for completed sessions
-                                        (session.endTime?.time ?: session.startTime.time) - session.startTime.time
+                                        val endTimeMs = session.endTime?.time ?: currentTimeMillis // Use current time if session is ongoing
+                                        endTimeMs - session.startTime.time
                                     }
                                     userData.toMemberDisplay( // Pass the calculated time to the mapper
                                         isAdmin = userData.userId == groupData.adminUserId,
