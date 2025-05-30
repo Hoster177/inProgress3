@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">inProgress</string>
+    <string name="app_name" translatable="false">inProgress</string>
+    <string name="settings">Настройки</string>
+    <string name="language_settings">Язык приложения</string>
+    <string name="log_out">Выйти из аккаунта</string>
+    <string name="notifications">Уведомления</string>
 </resources>
