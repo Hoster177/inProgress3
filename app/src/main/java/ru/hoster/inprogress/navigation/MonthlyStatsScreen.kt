@@ -125,7 +125,7 @@ fun MonthlyStatsScreen(
                 if (uiState.activityDistribution.isEmpty()) {
                     item { Text("Нет данных по задачам за этот месяц.") }
                 } else {
-                    // Placeholder for Pie Chart - You can integrate a library or custom Canvas drawing here
+
                     item {
                         Box(
                             modifier = Modifier
@@ -139,7 +139,7 @@ fun MonthlyStatsScreen(
                     }
                     item { Spacer(Modifier.height(16.dp)) }
 
-                    // Legend for Activity Distribution
+
                     uiState.activityDistribution.forEach { slice ->
                         item { ActivityLegendItem(slice) }
                         item { Divider(modifier = Modifier.padding(vertical = 4.dp)) }
@@ -153,10 +153,9 @@ fun MonthlyStatsScreen(
 @Composable
 fun CalendarHeader(locale: Locale) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        // Get days of the week starting from Monday for Russian locale
+
         val daysOfWeek = DayOfWeek.entries.toMutableList()
-        // Adjust to start from Monday if locale indicates it (DayOfWeek.MONDAY is 1, SUNDAY is 7)
-        val firstDayOfWeek = java.time.temporal.WeekFields.of(locale).firstDayOfWeek.value // MONDAY is 1
+        val firstDayOfWeek = java.time.temporal.WeekFields.of(locale).firstDayOfWeek.value
         while(daysOfWeek.first().value != firstDayOfWeek) {
             val day = daysOfWeek.removeAt(0)
             daysOfWeek.add(day)
@@ -192,7 +191,7 @@ fun CalendarDayCell(dayStat: CalendarDayStat) {
 
     Box(
         modifier = Modifier
-            .aspectRatio(1f) // Makes cells square
+            .aspectRatio(1f)
             .padding(2.dp)
             .border(1.dp, borderColor)
             .background(backgroundColor)

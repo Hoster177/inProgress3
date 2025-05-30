@@ -44,7 +44,7 @@ fun GroupsScreen(
                     message = "Ошибка: ${state.error}",
                     duration = SnackbarDuration.Short
                 )
-                viewModel.clearError() // Option to clear error after showing
+                viewModel.clearError()
             }
         }
     }

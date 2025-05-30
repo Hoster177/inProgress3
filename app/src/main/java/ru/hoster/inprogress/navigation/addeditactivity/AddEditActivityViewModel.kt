@@ -3,23 +3,17 @@ package ru.hoster.inprogress.navigation.addeditactivity
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-// Removed ActivityData import as it's not used and ActivityItem is preferred
-// import ru.hoster.inprogress.domain.model.ActivityData
 import ru.hoster.inprogress.domain.model.ActivityRepository
 import ru.hoster.inprogress.domain.model.AuthService
-// Removed Result import as it's not directly used by this ViewModel's public API after previous changes
-// import ru.hoster.inprogress.domain.model.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import ru.hoster.inprogress.data.ActivityItem // Your ActivityItem class
+import ru.hoster.inprogress.data.ActivityItem
 import java.util.Date
 import javax.inject.Inject
-
-// Ensure predefinedColorsHex is accessible here (e.g., defined in this file or imported)
 
 
 data class AddEditActivityScreenUiState(
@@ -130,19 +124,17 @@ class AddEditActivityViewModel @Inject constructor(
                     }
                     activityToSave = existingItem.copy(
                         name = currentName,
-                        // Assuming ActivityItem has 'colorHex'. Update it if it exists.
                         colorHex = _uiState.value.selectedColorHex ?: existingItem.colorHex
                     )
                     activityRepository.updateActivity(activityToSave)
                 } else {
                     activityToSave = ActivityItem(
-                        firebaseId = null, // Will be set by backend or sync logic
+                        firebaseId = null,
                         userId = currentUserId,
                         name = currentName,
                         createdAt = Date(),
                         totalDurationMillisToday = 0L,
                         isActive = false,
-                        // Assuming ActivityItem has 'colorHex'. Set it from UI state.
                         colorHex = _uiState.value.selectedColorHex
                     )
                     activityRepository.addActivity(activityToSave)

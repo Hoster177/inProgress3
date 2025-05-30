@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons // Required for Material Icons
-import androidx.compose.material.icons.filled.Settings // Required for the Settings icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,7 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource // For drawable resources
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,7 +36,7 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    // val context = LocalContext.current // context is used in AvatarImage, so it's fine
+    // val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.uiState.collectLatest { state ->
@@ -45,7 +45,7 @@ fun ProfileScreen(
                     message = state.saveSuccessMessage,
                     duration = SnackbarDuration.Short
                 )
-                viewModel.clearSaveSuccessMessage() // Clear message after showing
+                viewModel.clearSaveSuccessMessage()
             }
             if (state.error != null) {
                 snackbarHostState.showSnackbar(
@@ -65,7 +65,7 @@ fun ProfileScreen(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
-                actions = { // Add actions for the TopAppBar
+                actions = {
                     IconButton(onClick = onNavigateToUserSettings) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
@@ -88,7 +88,7 @@ fun ProfileScreen(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Avatar Display and Selection
+
                 AvatarSection(
                     selectedAvatarId = uiState.selectedAvatarId,
                     predefinedAvatars = viewModel.predefinedAvatars,
@@ -96,7 +96,7 @@ fun ProfileScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Name Display and Editing
+
                 OutlinedTextField(
                     value = uiState.editableName,
                     onValueChange = viewModel::onNameChange,
@@ -122,12 +122,11 @@ fun ProfileScreen(
                         Text("Сохранить изменения")
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp)) // Increased spacing a bit
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Navigation Buttons (excluding "Общие настройки")
-                Text("Дополнительная информация", style = MaterialTheme.typography.titleSmall) // Changed style for hierarchy
+
+                Text("Дополнительная информация", style = MaterialTheme.typography.titleSmall)
                 Spacer(modifier = Modifier.height(16.dp))
-                // Button for "Общие настройки" is now removed from here
                 Button(onClick = onNavigateToAchievements, modifier = Modifier.fillMaxWidth()) { Text("Достижения") }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(onClick = onNavigateToHelp, modifier = Modifier.fillMaxWidth()) { Text("Справка (FAQ)") }
@@ -143,7 +142,7 @@ fun AvatarSection(
     onAvatarSelected: (String) -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Display current selected avatar
+
         AvatarImage(
             avatarId = selectedAvatarId,
             modifier = Modifier
@@ -169,7 +168,7 @@ fun AvatarSection(
                             color = if (avatarId == selectedAvatarId) MaterialTheme.colorScheme.primary else Color.Gray,
                             shape = CircleShape
                         )
-                        .padding(2.dp) // Padding inside the border
+                        .padding(2.dp)
                 )
             }
         }
@@ -214,12 +213,12 @@ fun ProfileScreenPreview() {
             currentAvatarId = "avatar_1",
             selectedAvatarId = "avatar_1"
         )
-        Scaffold( // Added Scaffold to preview TopAppBar action
+        Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text("Профиль") },
                     actions = {
-                        IconButton(onClick = { /* For preview */ }) {
+                        IconButton(onClick = { /*  */ }) {
                             Icon(
                                 imageVector = Icons.Filled.Settings,
                                 contentDescription = "Общие настройки"

@@ -18,10 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController // For preview
+import androidx.navigation.compose.rememberNavController
 
-// Predefined colors list - this should be accessible, e.g., from a common constants file
-// or passed to ColorSelector. For this example, assume it's defined globally or imported.
 val predefinedColorsHex = listOf(
     "#FF6B6B", "#4ECDC4", "#45B7D1", "#FED766", "#2AB7CA",
     "#F0B67F", "#8A9B0F", "#C34A36", "#7F7EFF", "#FF96AD"
@@ -31,7 +29,6 @@ val predefinedColorsHex = listOf(
 @Composable
 fun AddEditActivityScreen(
     navController: NavController,
-    // activityId is handled by ViewModel's SavedStateHandle
     viewModel: AddEditActivityViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,7 +72,7 @@ fun AddEditActivityScreen(
             if (uiState.isLoading && !uiState.initialActivityLoaded && uiState.isEditing) {
                 CircularProgressIndicator(modifier = Modifier.padding(vertical = 20.dp))
                 Text("Загрузка данных занятия...")
-            } else if (uiState.isLoading) { // General loading for save or other operations
+            } else if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.padding(vertical = 20.dp))
                 Text("Сохранение...")
             } else {
@@ -85,7 +82,7 @@ fun AddEditActivityScreen(
                     label = { Text("Название занятия") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    isError = uiState.error != null && uiState.error!!.contains("Название") // More specific error check
+                    isError = uiState.error != null && uiState.error!!.contains("Название")
                 )
                 uiState.error?.let {
                     Text(
@@ -101,7 +98,7 @@ fun AddEditActivityScreen(
                 Text("Выберите цвет:", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                ColorSelector( // ColorSelector and ColorDot remain the same as before
+                ColorSelector(
                     colors = predefinedColorsHex,
                     selectedColorHex = uiState.selectedColorHex,
                     onColorSelected = { viewModel.setSelectedColor(it) }
@@ -111,8 +108,6 @@ fun AddEditActivityScreen(
     }
 }
 
-// ColorSelector and ColorDot composables (as defined previously in AddEditActivityScreen.kt)
-// Ensure they are present or imported.
 @Composable
 fun ColorSelector(
     colors: List<String>,
@@ -174,13 +169,8 @@ fun ColorDot(colorHex: String, isSelected: Boolean, onClick: () -> Unit) {
 @Composable
 fun AddActivityScreenHiltPreview() {
     MaterialTheme {
-        // For Hilt previews, you often need a more complex setup or to pass
-        // a manually created ViewModel with fakes if @Preview doesn't work directly
-        // with @HiltViewModel. For now, this might not render correctly without Hilt context.
-        // A common pattern is to have a Content composable that takes state and lambdas.
         AddEditActivityScreen(
             navController = rememberNavController()
-            // ViewModel is obtained via hiltViewModel()
         )
     }
 }
@@ -189,12 +179,9 @@ fun AddActivityScreenHiltPreview() {
 @Composable
 fun EditActivityScreenHiltPreview() {
     MaterialTheme {
-        // To preview edit mode with Hilt, you'd need to ensure SavedStateHandle
-        // can be pre-populated for the preview, or use a test harness.
-        // This will likely show the "Add" mode unless SavedStateHandle is mocked.
         AddEditActivityScreen(
             navController = rememberNavController()
-            // ViewModel is obtained via hiltViewModel(); it will try to get "activityId"
+
         )
     }
 }

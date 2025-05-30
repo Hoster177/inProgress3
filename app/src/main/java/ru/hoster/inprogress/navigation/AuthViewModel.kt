@@ -40,15 +40,11 @@ class AuthViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        // Corrected: Use result.message as it's the property holding the Exception
+
                         it.copy(isLoading = false, errorMessage = mapAuthException(result.message))
                     }
                 }
-                // Assuming Result.Loading is not part of your sealed class based on the definition provided.
-                // If it were, and it's an object:
-                // Result.Loading -> { /* Handle loading */ }
-                // If it were a class:
-                // is Result.Loading -> { /* Handle loading */ }
+
             }
         }
     }
@@ -65,11 +61,11 @@ class AuthViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        // Corrected: Use result.message as it's the property holding the Exception
+
                         it.copy(isLoading = false, errorMessage = mapAuthException(result.message))
                     }
                 }
-                // Assuming Result.Loading is not part of your sealed class.
+
             }
         }
     }
@@ -83,14 +79,12 @@ class AuthViewModel @Inject constructor(
     }
 
     private fun mapAuthException(exception: Exception): String {
-        // Consider logging the full exception here for debugging, e.g., Log.w("AuthViewModel", "Auth error:", exception)
         return when (exception) {
             is com.google.firebase.FirebaseNetworkException -> "Проверьте интернет-соединение"
             is com.google.firebase.auth.FirebaseAuthWeakPasswordException -> "Пароль слишком слабый. Используйте не менее 6 символов."
             is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> "Неверный email или пароль."
             is com.google.firebase.auth.FirebaseAuthUserCollisionException -> "Пользователь с таким email уже существует."
             is com.google.firebase.auth.FirebaseAuthInvalidUserException -> "Пользователь с таким email не найден."
-            // You might want to add a case for java.net.UnknownHostException if FirebaseNetworkException doesn't cover it
             else -> exception.message ?: "Произошла неизвестная ошибка"
         }
     }

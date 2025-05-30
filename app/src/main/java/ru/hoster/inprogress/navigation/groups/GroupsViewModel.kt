@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.navigation.groups // Or your preferred package for group feature
+package ru.hoster.inprogress.navigation.groups
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,29 +15,26 @@ import ru.hoster.inprogress.domain.model.Result
 import java.security.SecureRandom
 import javax.inject.Inject
 
-// Re-using GroupPreview and GroupsScreenUiState from your GroupsScreen.kt stub
-// If they are in a different file, ensure correct import.
-// For clarity, I'll define them here if they are meant to be part of the ViewModel's contract.
 
-data class GroupPreview( // Assuming this is defined in GroupsScreen.kt or a shared model file
+data class GroupPreview(
     val id: String,
     val name: String,
     val memberCount: Int,
     val description: String? = null,
-    val lastActivity: String? = "Нет недавней активности" // Placeholder
+    val lastActivity: String? = "Нет недавней активности"
 )
 
-data class GroupsScreenUiState( // Assuming this is defined in GroupsScreen.kt or a shared model file
+data class GroupsScreenUiState(
     val userGroups: List<GroupPreview> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val joinGroupDialogVisible: Boolean = false,
     val createGroupDialogVisible: Boolean = false,
-    val isProcessingAction: Boolean = false, // For create/join progress
+    val isProcessingAction: Boolean = false,
     val actionSuccessMessage: String? = null
 )
 
-// Helper to generate group codes (can be moved to a utility file)
+
 fun generateRandomGroupCode(length: Int = 6): String {
     val characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     val random = SecureRandom()
@@ -49,7 +46,7 @@ fun generateRandomGroupCode(length: Int = 6): String {
 @HiltViewModel
 class GroupsViewModel @Inject constructor(
     private val authService: AuthService,
-    private val groupRepository: GroupRepository // Assuming FirestoreGroupRepository implements this
+    private val groupRepository: GroupRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupsScreenUiState())
@@ -106,17 +103,15 @@ class GroupsViewModel @Inject constructor(
                 return@launch
             }
 
-            // TODO: Check for group code uniqueness in a loop if necessary, or ensure DB handles it.
-            // For simplicity, we generate one and hope for the best. A real app needs robust unique code generation.
             val groupCode = generateRandomGroupCode()
 
             val newGroup = GroupData(
                 name = name,
                 description = description?.takeIf { it.isNotBlank() },
                 adminUserId = userId,
-                memberUserIds = listOf(userId), // Creator is the first member and admin
+                memberUserIds = listOf(userId),
                 groupCode = groupCode
-                // id and createdAt will be set by repository/Firestore
+
             )
 
             when (val result = groupRepository.insertGroup(newGroup)) {
@@ -128,7 +123,7 @@ class GroupsViewModel @Inject constructor(
                             actionSuccessMessage = "Группа \"${newGroup.name}\" успешно создана!"
                         )
                     }
-                    loadUserGroups() // Refresh the list
+                    loadUserGroups()
                 }
                 is Result.Error -> {
                     _uiState.update {
@@ -155,13 +150,6 @@ class GroupsViewModel @Inject constructor(
                 return@launch
             }
 
-            // Assume findGroupByCode is added to GroupRepository and its implementation
-            // For now, I'll simulate this part or assume it exists in your GroupRepository.
-            // You'll need to add: `suspend fun findGroupByCode(groupCode: String): Result<GroupData?>`
-            // to your GroupRepository interface and implement it in FirestoreGroupRepository.
-
-            // Placeholder for findGroupByCode logic:
-            // Let's assume you've added findGroupByCode to your GroupRepository
             val findResult = (groupRepository as? ru.hoster.inprogress.data.repository.FirestoreGroupRepository)?.findGroupByCode(groupCodeToJoin)
                 ?: run {
                     _uiState.update { it.copy(isProcessingAction = false, error = "Функция поиска группы по коду не реализована в репозитории.")}
@@ -190,7 +178,7 @@ class GroupsViewModel @Inject constructor(
                                     actionSuccessMessage = "Вы успешно присоединились к группе \"${groupToJoin.name}\"!"
                                 )
                             }
-                            loadUserGroups() // Refresh the list
+                            loadUserGroups()
                         }
                         is Result.Error -> {
                             _uiState.update {
@@ -235,7 +223,7 @@ class GroupsViewModel @Inject constructor(
             name = this.name,
             memberCount = this.memberUserIds.size,
             description = this.description,
-            lastActivity = "Нет недавней активности" // Placeholder, needs real data source
+            lastActivity = "Нет недавней активности"
         )
     }
 }

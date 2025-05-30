@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.domain.model // или ваш пакет
+package ru.hoster.inprogress.domain.model
 
 import kotlinx.coroutines.flow.Flow
 
@@ -10,6 +10,4 @@ interface AuthService {
     suspend fun signUp(email: String, password: String): Result<String?> // Result<UserId> при успехе
     suspend fun signOut(): Result<Unit>
     suspend fun getCurrentUserEmail(): String?
-    // Можно добавить метод для сброса пароля, если нужно
-    // suspend fun sendPasswordResetEmail(email: String): Result<Unit>
 }

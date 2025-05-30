@@ -8,9 +8,9 @@ fun parseColor(colorString: String): Color {
         if (colorString.startsWith("#") && (colorString.length == 7 || colorString.length == 9)) {
             Color(colorString.toColorInt())
         } else {
-            Color.Gray // Default color for invalid format
+            Color.Gray
         }
     } catch (e: IllegalArgumentException) {
-        Color.Gray // Default color on parsing error
+        Color.Gray
     }
 }

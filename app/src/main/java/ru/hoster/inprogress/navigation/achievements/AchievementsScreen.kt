@@ -61,7 +61,7 @@ fun AchievementsScreen(
                 )
                 Divider()
             }
-            // TODO: Load actual achievements and their status
+
         }
     }
 }

@@ -17,10 +17,8 @@ import androidx.navigation.NavType
 import ru.hoster.inprogress.navigation.MainScreen
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-import dagger.hilt.android.AndroidEntryPoint // Убедитесь, что эта аннотация есть
+import dagger.hilt.android.AndroidEntryPoint
 import ru.hoster.inprogress.navigation.StatsScreen
-
-// Ваши существующие импорты экранов
 import ru.hoster.inprogress.navigation.addeditactivity.AddEditActivityScreen
 import ru.hoster.inprogress.navigation.AddEditGoalScreen
 import ru.hoster.inprogress.navigation.bottomNavItems
@@ -28,17 +26,15 @@ import ru.hoster.inprogress.navigation.groups.GroupsScreen
 import ru.hoster.inprogress.navigation.HelpFaqScreen
 import ru.hoster.inprogress.navigation.HomeViewModel
 import ru.hoster.inprogress.navigation.ProfileScreen
-import ru.hoster.inprogress.navigation.Route // Ваш объект Route
-import ru.hoster.inprogress.navigation.Screen // Ваш sealed class Screen для BottomNav
+import ru.hoster.inprogress.navigation.Route
+import ru.hoster.inprogress.navigation.Screen
 import ru.hoster.inprogress.navigation.UserSettingsScreen
 import ru.hoster.inprogress.navigation.achievements.AchievementsScreen
 import ru.hoster.inprogress.navigation.groups.AddEditGroupScreen
 import ru.hoster.inprogress.navigation.groups.GroupDetailsScreen
-
-// НОВЫЕ ИМПОРТЫ для экранов аутентификации (пути могут отличаться в зависимости от вашей структуры)
-import ru.hoster.inprogress.navigation.LoginScreen // Предполагая, что LoginScreen.kt в пакете navigation
+import ru.hoster.inprogress.navigation.LoginScreen
 import ru.hoster.inprogress.navigation.MainScreenUiState
-import ru.hoster.inprogress.navigation.SignUpScreen // Предполагая, что SignUpScreen.kt в пакете navigation
+import ru.hoster.inprogress.navigation.SignUpScreen
 import ru.hoster.inprogress.navigation.StatsViewModel
 
 
@@ -49,7 +45,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // enableEdgeToEdge() // Опционально, если используете
+        // enableEdgeToEdge()
 
         setContent {
             InProgressTheme {
@@ -57,8 +53,7 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                // Определяем, нужно ли показывать BottomBar
-                // Не показываем на экранах Login и SignUp
+
                 val showBottomBar = bottomNavItems.any { it.route == currentRoute } &&
                         currentRoute != Route.LOGIN && currentRoute != Route.SIGN_UP
 
@@ -104,7 +99,7 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Main.route) {
                             val homeViewModel: HomeViewModel = hiltViewModel()
                             // Создаем временную заглушку для uiState
-                            val placeholderUiState = MainScreenUiState() // Используйте ваше имя класса
+                            val placeholderUiState = MainScreenUiState()
                             val uiState by homeViewModel.uiState.collectAsState()
                             MainScreen(
                                 onDailyTimerClick = { navController.navigate(Route.STATISTICS) },
@@ -112,21 +107,20 @@ class MainActivity : ComponentActivity() {
                                 onEditGoalClick = { goalId ->
                                     navController.navigate(Route.addEditGoal(goalId = goalId))
                                 },
-                                // Замените
+
                                 onDeleteActivityClick = { activityId -> homeViewModel.onDeleteActivityClick(activityId)},
                                 onActivityTimerToggle = {  activityId-> homeViewModel.onActivityTimerToggle(activityId)  /* Пока ничего не делаем */ },
-                                uiState = uiState, // <--- ЗАМЕНА
+                                uiState = uiState,
                                 onAddNewGoalClick = { /* Пока ничего не делаем */ },
                                 onViewAllGoalsClick = { /* Пока ничего не делаем */ }
                             )
                         }
                         composable(Screen.Groups.route) {
                             GroupsScreen(
-                                onNavigateToGroupDetails = { groupId -> // Реализуем навигацию
+                                onNavigateToGroupDetails = { groupId ->
                                     navController.navigate(Route.groupDetails(groupId))
                                 }
-                                // navController = navController // Передаем, если GroupsScreen имеет свою под-навигацию
-                                // ViewModel будет внедрен через Hilt позже
+
                             )
                         }
                         composable(Screen.Profile.route) {
@@ -145,7 +139,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(
-                            route = Route.addEditActivity(), // Используем helper функцию
+                            route = Route.addEditActivity(),
                             arguments = listOf(navArgument("activityId") {
                                 type = NavType.StringType
                                 nullable = true
@@ -154,7 +148,7 @@ class MainActivity : ComponentActivity() {
                             AddEditActivityScreen(navController = navController)
                         }
                         composable(
-                            route = Route.addEditGoal(), // Используем helper функцию
+                            route = Route.addEditGoal(),
                             arguments = listOf(navArgument("goalId") {
                                 type = NavType.StringType
                                 nullable = true
@@ -189,11 +183,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(
-                            // Маршрут должен соответствовать определению в Route.kt, включая обязательный аргумент
+
                             route = Route.GROUP_DETAILS + "/{groupId}",
                             arguments = listOf(navArgument("groupId") {
                                 type = NavType.StringType
-                                // nullable = false // groupId здесь обязателен
                             })
                         ) {
                             GroupDetailsScreen(navController = navController)

@@ -49,10 +49,8 @@ class MonthlyStatsViewModel @Inject constructor(
                 return@launch
             }
 
-            // Get all activities first to map IDs to names and colors
-            // Using single() assuming we want a snapshot of activities. If they change frequently, adjust.
             val allActivities = try {
-                activityRepository.getEnrichedActivitiesFlow().first() // Or a non-flow method if available
+                activityRepository.getEnrichedActivitiesFlow().first()
             } catch (e: Exception) {
                 Log.e("MonthlyStatsVM", "Error fetching activities", e)
                 _uiState.update { it.copy(isLoading = false, error = "Не удалось загрузить задачи.") }
@@ -69,7 +67,7 @@ class MonthlyStatsViewModel @Inject constructor(
             val previousMonthEnd = previousYearMonth.atEndOfMonth().toDateWithTime(23, 59, 59)
 
             try {
-                // Combine results from current month sessions and previous month sessions
+
                 val currentMonthSessionsFlow = timerService.getSessionsForUserInDateRange(userId, currentMonthStart, currentMonthEnd)
                 val previousMonthSessionsFlow = timerService.getSessionsForUserInDateRange(userId, previousMonthStart, previousMonthEnd)
 
@@ -85,7 +83,7 @@ class MonthlyStatsViewModel @Inject constructor(
                     _uiState.update { it.copy(isLoading = false, error = "Ошибка при обработке данных сессий: ${e.message}") }
                 }
                     .collect { processedState ->
-                        _uiState.value = processedState // Update with the fully processed state
+                        _uiState.value = processedState
                     }
 
             } catch (e: Exception) {
@@ -101,7 +99,6 @@ class MonthlyStatsViewModel @Inject constructor(
         previousMonthSessions: List<TimerSession>,
         activitiesMap: Map<Long, ActivityItem>
     ): MonthlyStatsUiState {
-        // 1. Process current month's sessions
         val dailyDurationsCurrentMonth = mutableMapOf<LocalDate, Long>()
         val activityDurationsCurrentMonth = mutableMapOf<Long, Long>()
         var currentMonthTotalMillis = 0L
@@ -118,7 +115,7 @@ class MonthlyStatsViewModel @Inject constructor(
             }
         }
 
-        // 2. Process previous month's sessions
+
         var previousMonthTotalMillis = 0L
         previousMonthSessions.forEach { session ->
             if (session.endTime != null) {
@@ -129,10 +126,10 @@ class MonthlyStatsViewModel @Inject constructor(
             }
         }
 
-        // 3. Prepare calendar days
+
         val calendarDays = generateCalendarDays(yearMonth, dailyDurationsCurrentMonth)
 
-        // 4. Prepare activity distribution for pie chart
+
         val activityDistribution = activityDurationsCurrentMonth.mapNotNull { (activityId, duration) ->
             activitiesMap[activityId]?.let { activity ->
                 ActivityPieSlice(
@@ -141,12 +138,12 @@ class MonthlyStatsViewModel @Inject constructor(
                     durationMillis = duration,
                     durationFormatted = formatDuration(duration),
                     percentage = if (currentMonthTotalMillis > 0) duration.toFloat() / currentMonthTotalMillis else 0f,
-                    colorHex = activity.colorHex!!.ifEmpty { "#CCCCCC" } // Default color if empty
+                    colorHex = activity.colorHex!!.ifEmpty { "#CCCCCC" }
                 )
             }
         }.sortedByDescending { it.durationMillis }
 
-        // 5. Prepare comparison string
+
         val comparisonValue = currentMonthTotalMillis - previousMonthTotalMillis
         val comparisonFormatted = formatMonthComparison(currentMonthTotalMillis, previousMonthTotalMillis, yearMonth.minusMonths(1))
 
@@ -170,15 +167,12 @@ class MonthlyStatsViewModel @Inject constructor(
         val firstDayOfMonth = yearMonth.atDay(1)
         val lastDayOfMonth = yearMonth.atEndOfMonth()
 
-        // Get the first day to display in the calendar (might be from previous month)
-        // Week starts on Monday for Locale.getDefault() or specific locale if needed
         val firstDayOfCalendar = firstDayOfMonth.with(WeekFields.of(russianLocale).firstDayOfWeek).with(TemporalAdjusters.previousOrSame(WeekFields.of(russianLocale).firstDayOfWeek))
 
 
         var currentDay = firstDayOfCalendar
         val today = LocalDate.now()
 
-        // Usually 6 weeks to cover all scenarios
         for (i in 0 until 42) { // 6 weeks * 7 days
             val duration = dailyDurations[currentDay] ?: 0L
             days.add(
@@ -191,7 +185,7 @@ class MonthlyStatsViewModel @Inject constructor(
                 )
             )
             currentDay = currentDay.plusDays(1)
-            // Optimization: if currentDay is in next month and it's a Monday, and we have at least 5 weeks, break.
+
             if (currentDay.monthValue != yearMonth.monthValue && currentDay.dayOfWeek == WeekFields.of(russianLocale).firstDayOfWeek && days.size >=35) {
                 if (days.any{it.date.dayOfMonth == lastDayOfMonth.dayOfMonth && it.date.monthValue == lastDayOfMonth.monthValue} || currentDay.isAfter(lastDayOfMonth)) break
             }
@@ -243,7 +237,7 @@ class MonthlyStatsViewModel @Inject constructor(
         loadStatsForMonth(current.minusMonths(1))
     }
 
-    // Helper extension functions for date conversions
+
     private fun LocalDate.toDate(): Date {
         return Date.from(this.atStartOfDay(ZoneId.systemDefault()).toInstant())
     }

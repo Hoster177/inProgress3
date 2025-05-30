@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.navigation // или ваш пакет
+package ru.hoster.inprogress.navigation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,10 +23,10 @@ import ru.hoster.inprogress.navigation.AuthUiState // Убедитесь, что
 @Composable
 fun SignUpScreen(
     navController: NavController,
-    viewModel: AuthViewModel = hiltViewModel() // Внедряем ViewModel
+    viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current // Для Toast или Snackbar, если нужно
+    val context = LocalContext.current
 
     // Обработка навигационных событий
     LaunchedEffect(key1 = uiState.navigationEvent) {
@@ -35,22 +35,19 @@ fun SignUpScreen(
                 navController.navigate(Screen.Main.route) { // Переход на главный экран
                     // Очищаем бэкстек до Login (если он был), и сам Login, и SignUp
                     popUpTo(Route.LOGIN) { inclusive = true }
-                    // Если бы мы хотели вернуться на Login после регистрации, то было бы:
-                    // popUpTo(Route.SIGN_UP) { inclusive = true }
-                    // navController.navigate(Route.LOGIN)
                 }
                 viewModel.onNavigationEventConsumed() // Сообщаем ViewModel, что событие обработано
             }
-            null -> { /* No event */ }
+            null -> { /*  */ }
         }
     }
 
     // Обработка сообщений об ошибках (например, через Snackbar)
     LaunchedEffect(key1 = uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
-            // Здесь можно показать Snackbar
+
             android.util.Log.e("SignUpScreen", "Error: $message")
-            // viewModel.clearErrorMessage() // Если нужно сбрасывать после показа
+            // viewModel.clearErrorMessage()
         }
     }
 

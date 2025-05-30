@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.navigation.groups// Убедитесь, что пакет правильный
+package ru.hoster.inprogress.navigation.groups
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -19,7 +19,7 @@ import java.util.Calendar
 import java.util.Date
 import javax.inject.Inject
 
-// --- UI-специфичные модели и Navigation Signal ---
+
 data class GroupDetailDisplay(
     val id: String,
     val name: String,
@@ -33,7 +33,7 @@ data class MemberDisplay(
     val displayName: String,
     val avatarUrl: String?,
     val isAdmin: Boolean,
-    val todayTrackedTimeFormatted: String? = null // New field
+    val todayTrackedTimeFormatted: String? = null
 )
 
 data class GroupDetailsScreenUiState(
@@ -52,7 +52,7 @@ sealed class GroupDetailsNavigationSignal {
     object NavigateBack : GroupDetailsNavigationSignal()
     data class NavigateToEditGroup(val groupId: String) : GroupDetailsNavigationSignal()
 }
-// --- Конец UI-специфичных моделей ---
+
 
 @HiltViewModel
 class GroupDetailsViewModel @Inject constructor(
@@ -82,7 +82,7 @@ class GroupDetailsViewModel @Inject constructor(
     fun loadGroupDetails() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val currentUserIdFromState = _uiState.value.currentUserId // Ensure currentUserId is loaded in init
+            val currentUserIdFromState = _uiState.value.currentUserId
             if (currentUserIdFromState == null) {
                 _uiState.update { it.copy(isLoading = false, error = "User not authenticated.") }
                 return@launch
@@ -101,7 +101,7 @@ class GroupDetailsViewModel @Inject constructor(
 
                     if (groupData.memberUserIds.isNotEmpty()) {
                         val memberIdsToFetch = if (groupData.memberUserIds.size > 30) {
-                            _uiState.update { it.copy(error = "Отображаются первые 30 участников.")} // Optional: Inform user if list is truncated
+                            _uiState.update { it.copy(error = "Отображаются первые 30 участников.")}
                             groupData.memberUserIds.take(30)
                         } else {
                             groupData.memberUserIds
@@ -111,37 +111,33 @@ class GroupDetailsViewModel @Inject constructor(
                             is Result.Success -> {
                                 val memberUserDataList = membersResult.data
 
-                                // --- START OF NEW LOGIC FOR TRACKED TIME ---
+
                                 val todayStart = getStartOfDay(Date())
                                 val todayEnd = getEndOfDay(Date())
 
                                 val memberDisplaysWithTime = memberUserDataList.map { userData ->
-                                    // You need a way to get sessions. This assumes a non-Flow, direct DAO call.
-                                    // If your DAO returns Flow, you'd need a more complex collection strategy here,
-                                    // possibly by fetching all sessions for all members in one go if feasible,
-                                    // or collecting flows individually (which can be resource-intensive).
                                     val sessions = timerSessionDao.getSessionsForDateRange(
                                         userId = userData.userId,
                                         fromDate = todayStart,
                                         toDate = todayEnd
                                     )
-                                    val currentTimeMillis = System.currentTimeMillis() // Get the current time once
+                                    val currentTimeMillis = System.currentTimeMillis()
 
                                     val totalMillisToday = sessions.sumOf { session ->
-                                        val endTimeMs = session.endTime?.time ?: currentTimeMillis // Use current time if session is ongoing
+                                        val endTimeMs = session.endTime?.time ?: currentTimeMillis
                                         endTimeMs - session.startTime.time
                                     }
-                                    userData.toMemberDisplay( // Pass the calculated time to the mapper
+                                    userData.toMemberDisplay(
                                         isAdmin = userData.userId == groupData.adminUserId,
                                         todayTrackedTimeMillis = totalMillisToday
                                     )
                                 }
-                                // --- END OF NEW LOGIC FOR TRACKED TIME ---
+
 
                                 _uiState.update {
                                     it.copy(
                                         group = groupDisplay,
-                                        members = memberDisplaysWithTime, // Use the updated list
+                                        members = memberDisplaysWithTime,
                                         isCurrentUserAdmin = isAdmin,
                                         isLoading = false
                                     )
@@ -158,7 +154,7 @@ class GroupDetailsViewModel @Inject constructor(
                                 }
                             }
                         }
-                    } else { // No members in the group
+                    } else {
                         _uiState.update {
                             it.copy(
                                 group = groupDisplay,
@@ -208,7 +204,7 @@ class GroupDetailsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             leaveGroupInProgress = false,
-                            // Corrected: Use .message.message
+
                             error = "Failed to leave group: ${result.message.message}"
                         )
                     }
@@ -245,7 +241,6 @@ class GroupDetailsViewModel @Inject constructor(
             displayName = this.displayName,
             avatarUrl = this.avatarUrl,
             isAdmin = isAdmin,
-            // ADDED: Format the time using your utility function
             todayTrackedTimeFormatted = formatDurationViewModel(todayTrackedTimeMillis, forceHours = false)
         )
     }

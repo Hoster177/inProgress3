@@ -10,7 +10,6 @@ import ru.hoster.inprogress.data.ActivityItem
 import ru.hoster.inprogress.data.TimerSession
 import ru.hoster.inprogress.domain.model.ActivityRepository
 import ru.hoster.inprogress.domain.model.AuthService
-// import ru.hoster.inprogress.service.TimerService // If you switch to using TimerService
 import ru.hoster.inprogress.data.local.TimerSessionDao
 import java.text.SimpleDateFormat
 import java.util.*

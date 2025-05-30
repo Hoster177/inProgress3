@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AddEditGoalScreen(
     navController: androidx.navigation.NavController,
-    goalId: String? // Null if adding new, non-null if editing
+    goalId: String?
 ) {
     val screenTitle = if (goalId == null) "Добавить цель" else "Редактировать цель"
 
@@ -44,11 +44,9 @@ fun AddEditGoalScreen(
         ) {
             Text(screenTitle, style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(16.dp))
-            // TODO: Implement form fields for goal title, type, target, etc.
-            // TODO: Load goal data if goalId is not null
             TextField(value = "", onValueChange = {}, label = { Text("Название цели") })
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { /* TODO: Save goal and pop back */ navController.popBackStack() }) {
+            Button(onClick = { /* */ navController.popBackStack() }) {
                 Text("Сохранить")
             }
         }

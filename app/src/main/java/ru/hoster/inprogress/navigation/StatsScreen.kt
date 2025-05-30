@@ -1,13 +1,13 @@
-package ru.hoster.inprogress.navigation // Or your actual package
+package ru.hoster.inprogress.navigation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn // Keep for Daily view
-import androidx.compose.foundation.lazy.grid.GridCells // For Monthly Calendar
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid // For Monthly Calendar
-import androidx.compose.foundation.lazy.grid.items // For Monthly Calendar (different import)
-import androidx.compose.foundation.lazy.items // Keep for Daily view
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -30,12 +30,12 @@ import java.time.format.TextStyle
 import java.util.Date
 import java.util.Locale
 
-import androidx.compose.foundation.Canvas // For drawing the pie chart
-import androidx.compose.ui.graphics.drawscope.Stroke // For potential donut chart style
-import androidx.compose.ui.graphics.drawscope.Fill // To fill the slices
-import androidx.compose.ui.geometry.Size // For defining arc bounds
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.geometry.Size
 
-// Enum for tab selection (if not defined elsewhere)
+
 enum class StatsViewType(val title: String) {
     Daily("По дням"),
     Monthly("По месяцам")
@@ -44,13 +44,12 @@ enum class StatsViewType(val title: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
-    dailyViewModel: StatsViewModel = hiltViewModel(), // This ViewModel should expose DailyStatsUiState
-    // navController: NavController // For navigating back, etc.
+    dailyViewModel: StatsViewModel = hiltViewModel(),
 ) {
     var selectedTab by remember { mutableStateOf(StatsViewType.Daily) }
     val monthlyViewModel: MonthlyStatsViewModel = hiltViewModel()
 
-    val dailyUiState by dailyViewModel.uiState.collectAsState() // This should now be DailyStatsUiState
+    val dailyUiState by dailyViewModel.uiState.collectAsState()
     val monthlyUiState by monthlyViewModel.uiState.collectAsState()
 
     Scaffold(
@@ -88,7 +87,7 @@ fun StatsScreen(
             when (selectedTab) {
                 StatsViewType.Daily -> {
                     DailyStatsContent(
-                        uiState = dailyUiState, // This now expects DailyStatsUiState and should receive it
+                        uiState = dailyUiState,
                         onDateSelected = { dailyViewModel.selectDate(it) },
                         modifier = Modifier.padding(16.dp)
                     )
@@ -96,7 +95,7 @@ fun StatsScreen(
                 StatsViewType.Monthly -> {
                     MonthlyStatsContent(
                         uiState = monthlyUiState,
-                        modifier = Modifier.padding(0.dp) // Monthly content will have its own LazyColumn padding
+                        modifier = Modifier.padding(0.dp)
                     )
                 }
             }
@@ -106,14 +105,14 @@ fun StatsScreen(
 
 @Composable
 fun DailyStatsContent(
-    uiState: DailyStatsUiState, // Expects DailyStatsUiState
+    uiState: DailyStatsUiState,
     onDateSelected: (Date) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dateDialogState = rememberMaterialDialogState()
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Date Picker Row
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { dateDialogState.show() }.padding(vertical = 8.dp)
@@ -223,13 +222,12 @@ fun LocalDate.toDate(): Date {
 
 data class ActivityStats(val activityName: String, val totalDurationFormatted: String)
 
-// Add this composable function within your StatsScreen.kt or a relevant UI utility file
 
 @Composable
 fun PieChart(
     slices: List<ActivityPieSlice>,
     modifier: Modifier = Modifier,
-    strokeWidth: Float = 0f // Set to > 0f for a donut chart, 0f for a filled pie chart
+    strokeWidth: Float = 0f
 ) {
     if (slices.isEmpty()) {
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -238,27 +236,27 @@ fun PieChart(
         return
     }
 
-    val totalPercentage = slices.sumOf { it.percentage.toDouble() }.toFloat() // Should be close to 1.0f
+    val totalPercentage = slices.sumOf { it.percentage.toDouble() }.toFloat()
 
     Canvas(modifier = modifier) {
         val canvasWidth = size.width
         val canvasHeight = size.height
-        val diameter = minOf(canvasWidth, canvasHeight) * 0.9f // Use 90% of the smaller dimension
+        val diameter = minOf(canvasWidth, canvasHeight) * 0.9f
         val radius = diameter / 2f
         val topLeftX = (canvasWidth - diameter) / 2f
         val topLeftY = (canvasHeight - diameter) / 2f
 
-        var startAngle = -90f // Start at 12 o'clock
+        var startAngle = -90f
 
         slices.forEach { slice ->
-            val sweepAngle = (slice.percentage / totalPercentage) * 360f // Normalize sweep angle
+            val sweepAngle = (slice.percentage / totalPercentage) * 360f
             val sliceColor = parseColor(slice.colorHex)
 
             drawArc(
                 color = sliceColor,
                 startAngle = startAngle,
                 sweepAngle = sweepAngle,
-                useCenter = true, // True for pie, false for arc outline
+                useCenter = true,
                 topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
                 size = Size(diameter, diameter),
                 style = if (strokeWidth > 0f) Stroke(width = strokeWidth) else Fill
@@ -268,13 +266,10 @@ fun PieChart(
     }
 }
 
-// In StatsScreen.kt
-
-// ... (other composables like DailyStatsContent, CalendarHeader, etc.)
 
 @Composable
 fun MonthlyStatsContent(
-    uiState: MonthlyStatsUiState, // From MonthlyStatsViewModel
+    uiState: MonthlyStatsUiState,
     modifier: Modifier = Modifier
 ) {
     val russianLocale = Locale("ru")
@@ -292,12 +287,12 @@ fun MonthlyStatsContent(
             )
         }
     } else {
-        LazyColumn( // This LazyColumn is for the entire monthly stats content
+        LazyColumn(
             modifier = modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp)
         ) {
             item {
-                Text( // Month display now part of content, as TopAppBar is shared
+                Text(
                     text = uiState.monthDisplayName,
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -351,16 +346,16 @@ fun MonthlyStatsContent(
                 item { Text("Нет данных по задачам за этот месяц.") }
             } else {
                 item {
-                    // Integrate the actual PieChart composable here
+
                     PieChart(
                         slices = uiState.activityDistribution,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp) // Adjust height as desired
+                            .height(200.dp)
                             .padding(vertical = 16.dp)
                     )
                 }
-                // Legend for Activity Distribution (already present)
+
                 uiState.activityDistribution.forEach { slice ->
                     item { ActivityLegendItem(slice) }
                     item { Divider(modifier = Modifier.padding(vertical = 4.dp)) }

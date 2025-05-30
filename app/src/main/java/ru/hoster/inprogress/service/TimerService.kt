@@ -1,6 +1,6 @@
 package ru.hoster.inprogress.service
 
-import android.util.Log // Добавьте импорт логов
+import android.util.Log
 import ru.hoster.inprogress.data.TimerSession
 import ru.hoster.inprogress.data.local.TimerSessionDao
 import ru.hoster.inprogress.data.repository.FirestoreSessionRepository
@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest // Для переключения таймера
-import kotlinx.coroutines.flow.flow // Для создания тикающего Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -34,12 +34,12 @@ class TimerService @Inject constructor(
     private val timerSessionDao: TimerSessionDao,
     private val firestoreSessionRepository: FirestoreSessionRepository
 ) {
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob()) // Используем SupervisorJob
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val firestoreScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Хранит ID текущей активной сессии в локальной БД (не TimerSession.id, а activityId)
     // и время ее старта.
-    private val _activeLocalSessionInfo = MutableStateFlow<Pair<Long, Long>?>(null) // Pair<activityId, startTimeMillis>
+    private val _activeLocalSessionInfo = MutableStateFlow<Pair<Long, Long>?>(null)
 
     private var tickerJob: Job? = null
 
@@ -48,17 +48,8 @@ class TimerService @Inject constructor(
     val activeTimerFlow: StateFlow<ActiveTimerInfo?> = _activeTimerFlow.asStateFlow()
 
 
-    // При инициализации сервиса, проверим, нет ли уже активной сессии в БД
-    // Это важно, если сервис был убит и перезапущен, а таймер шел
     init {
         serviceScope.launch {
-            // Нужен способ получить userId при старте сервиса.
-            // Это ограничение, если TimerService не имеет прямого доступа к AuthService.
-            // Пока оставим это TODO или предположим, что userId передается при каждом вызове.
-            // Для простоты, сейчас эта логика не будет восстанавливать таймер при перезапуске сервиса,
-            // а будет полагаться на явные вызовы start/stop.
-            // Если нужно восстановление, то при старте сервиса нужно будет для текущего userId
-            // найти активную сессию в DAO и запустить _activeLocalSessionInfo.value = Pair(it.activityId, it.startTime.time)
         }
     }
 
@@ -190,7 +181,7 @@ class TimerService @Inject constructor(
         return timerSessionDao.getActiveSession(userId, activityLocalId) // Используем локальный ID
     }
 
-    // Остальные методы сервиса (getAllSessionsForUser и т.д.) остаются как есть
+
     fun getAllSessionsForUser(userId: String): Flow<List<TimerSession>> {
         return timerSessionDao.getAllSessionsFlow(userId)
     }

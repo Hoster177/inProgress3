@@ -1,6 +1,4 @@
-package ru.hoster.inprogress.domain.model // ИСПРАВЛЕННЫЙ ПАКЕТ
-
-// Предполагаем, что Result уже определен (см. UserRepository.kt)
+package ru.hoster.inprogress.domain.model
 
 interface GroupRepository {
     suspend fun getGroupById(groupId: String): Result<GroupData?>
@@ -10,7 +8,4 @@ interface GroupRepository {
     suspend fun removeUserFromGroup(groupId: String, userId: String): Result<Unit>
     suspend fun addUserToGroup(groupId: String, userId: String): Result<Unit> // Новый полезный метод
     suspend fun findGroupByCode(groupCode: String): Result<GroupData?>
-    // Можно добавить другие методы:
-    // suspend fun deleteGroup(groupId: String): Result<Unit>
-    // suspend fun findGroupByCode(groupCode: String): Result<GroupData?>
 }

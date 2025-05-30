@@ -53,11 +53,11 @@ fun UserSettingsScreen(
                 RadioButton(selected = selectedLanguage == "English", onClick = { selectedLanguage = "English" })
                 Text("English", modifier = Modifier.padding(start = 8.dp))
             }
-            // TODO: Persist language choice and update app locale
+
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Notification Setting
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -69,17 +69,16 @@ fun UserSettingsScreen(
                     onCheckedChange = { notificationsEnabled = it }
                 )
             }
-            // TODO: Implement actual notification enabling/disabling logic
+
 
             Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = { /* TODO: Implement Logout */ }) {
+            Button(onClick = { /* */ }) {
                 Text("Выйти из аккаунта")
             }
             Spacer(modifier = Modifier.height(16.dp))
-            TextButton(onClick = { /* TODO: Show User Agreement */ }) {
+            TextButton(onClick = { /*  */ }) {
                 Text("Пользовательское соглашение")
             }
-            // TODO: Implement login/logout, user agreement display, etc.
         }
     }
 }

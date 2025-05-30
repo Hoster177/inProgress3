@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.domain.model // ИСПРАВЛЕННЫЙ ПАКЕТ
+package ru.hoster.inprogress.domain.model
 
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
@@ -12,6 +12,5 @@ data class GroupData(
     val groupCode: String? = null,
     @ServerTimestamp val createdAt: Date? = null // Firestore заполнит это
 ) {
-    // Добавьте конструктор без аргументов для десериализации Firestore
     constructor() : this("", "Unnamed Group", null, "", emptyList(), null, null)
 }

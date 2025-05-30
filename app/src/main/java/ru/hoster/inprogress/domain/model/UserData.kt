@@ -10,6 +10,5 @@ data class UserData(
     val avatarUrl: String? = null,
     @ServerTimestamp val createdAt: Date? = null // Firestore заполнит это
 ) {
-    // Добавьте конструктор без аргументов для десериализации Firestore, если это необходимо
     constructor() : this("", "Unknown User", null, null, null)
 }

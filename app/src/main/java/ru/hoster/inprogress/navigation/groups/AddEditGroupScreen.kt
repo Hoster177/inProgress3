@@ -17,14 +17,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
-// import androidx.hilt.navigation.compose.hiltViewModel
-// import ru.hoster.inprogress.ui.viewmodels.AddEditGroupViewModel // Пример пути к ViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditGroupScreen(
     navController: NavController,
-    groupId: String? // Получается из SavedStateHandle в ViewModel, но может быть передан для простоты заглушки
+    groupId: String?
     // viewModel: AddEditGroupViewModel = hiltViewModel()
 ) {
     // LaunchedEffect(Unit) {
@@ -59,8 +57,7 @@ fun AddEditGroupScreen(
                     else "Экран Редактирования Группы (ID: $groupId) (Заглушка)"
                 )
                 // TODO: Добавить поля для названия группы, описания и т.д.
-                // Например, TextField для uiState.groupName, uiState.groupDescription
-                // Button для viewModel.saveGroup()
+
             }
         }
     }

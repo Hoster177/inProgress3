@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.navigation // или ваш пакет
+package ru.hoster.inprogress.navigation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,7 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import ru.hoster.inprogress.navigation.AuthNavigationEvent
 import ru.hoster.inprogress.navigation.AuthViewModel
-import ru.hoster.inprogress.navigation.AuthUiState // Убедитесь, что импорт правильный
+import ru.hoster.inprogress.navigation.AuthUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,36 +26,28 @@ fun LoginScreen(
     viewModel: AuthViewModel = hiltViewModel() // Внедряем ViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current // Для Toast или Snackbar, если нужно
+    val context = LocalContext.current
 
-    // Обработка навигационных событий
+
     LaunchedEffect(key1 = uiState.navigationEvent) {
         when (val event = uiState.navigationEvent) {
             is AuthNavigationEvent.NavigateToMain -> {
-                navController.navigate(Screen.Main.route) { // Переход на главный экран
-                    popUpTo(Route.LOGIN) { inclusive = true } // Удаляем LoginScreen из бэкстека
+                navController.navigate(Screen.Main.route) {
+                    popUpTo(Route.LOGIN) { inclusive = true }
                 }
-                viewModel.onNavigationEventConsumed() // Сообщаем ViewModel, что событие обработано
+                viewModel.onNavigationEventConsumed()
             }
-            null -> { /* No event */ }
+            null -> { /*  */ }
         }
     }
 
-    // Обработка сообщений об ошибках (например, через Snackbar)
     LaunchedEffect(key1 = uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
-            // Здесь можно показать Snackbar
-            // scaffoldState.snackbarHostState.showSnackbar(message)
-            // Пока просто выведем в Log или можно использовать Toast для простоты
             android.util.Log.e("LoginScreen", "Error: $message")
-            // Не забудьте вызвать viewModel.clearErrorMessage() если показываете Snackbar/Toast и хотите
-            // чтобы он не показывался снова при рекомпозиции без нового события ошибки.
-            // Для простоты, пока можно оставить так, ошибка будет видна в errorMessage Text.
         }
     }
 
-    Scaffold( // Используем Scaffold для возможности добавления Snackbar в будущем
-        // snackbarHost = { SnackbarHost(hostState = scaffoldState.snackbarHostState) }
+    Scaffold(
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -111,12 +103,12 @@ fun LoginScreen(
                 }
 
                 TextButton(onClick = {
-                    navController.navigate(Route.SIGN_UP) // Переход на экран регистрации
+                    navController.navigate(Route.SIGN_UP)
                 }) {
                     Text("Нет аккаунта? Зарегистрироваться")
                 }
 
-                // Кнопка для симуляции входа (если еще нужна для тестирования без Firebase)
+
                  Button(onClick = {
                      navController.navigate(Screen.Main.route) {
                          popUpTo(Route.LOGIN) { inclusive = true }

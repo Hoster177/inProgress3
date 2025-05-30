@@ -33,10 +33,10 @@ import java.util.concurrent.TimeUnit
 import java.util.TimeZone // For UTC as requested by user in meta
 
 
-data class MainScreenUiStatePlaceholder( // Назовите его в соответствии с вашим реальным UiState
+data class MainScreenUiStatePlaceholder(
     val isLoading: Boolean = false,
     val userName: String = "User",
-    val activities: List<String> = emptyList(), // Примерные поля
+    val activities: List<String> = emptyList(),
     val currentDate: String = getCurrentDateString(),
     val dailyTotalTimeFormatted: String = "00:00:00",
     val goals: List<Goal> = emptyList()
@@ -159,16 +159,15 @@ fun MainScreen(
                 } else {
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(
-                            items = uiState.activities, // Теперь это List<ActivityItemUi>
-                            key = { activityUi -> // Имя параметра изменено на activityUi для ясности
-                                activityUi.baseActivity.firebaseId ?: activityUi.baseActivity.id.toString() // <--- ИСПРАВЛЕНИЕ ЗДЕСЬ
+                            items = uiState.activities,
+                            key = { activityUi ->
+                                activityUi.baseActivity.firebaseId ?: activityUi.baseActivity.id.toString()
                             }
                         ) { activityUi -> // Имя параметра изменено на activityUi
-                            val idToPass = activityUi.baseActivity.firebaseId ?: activityUi.baseActivity.id.toString() // <--- ИСПРАВЛЕНИЕ ЗДЕСЬ
+                            val idToPass = activityUi.baseActivity.firebaseId ?: activityUi.baseActivity.id.toString()
                             ActivityItemRow(
-                                activityUi = activityUi, // Передаем ActivityItemUi
-                                // currentTimerFormatted = if (activityUi.baseActivity.id == uiState.currentlyTimingActivityId) uiState.currentlyTimingDurationFormatted else null,
-                                onTimerToggle = { onActivityTimerToggle(idToPass) }, // Передаем только ID
+                                activityUi = activityUi,
+                                onTimerToggle = { onActivityTimerToggle(idToPass) },
                                 onDeleteClick = { onDeleteActivityClick(idToPass) }
                             )
                             Divider()
@@ -217,8 +216,7 @@ fun GoalItem(goal: Goal, onEditClick: () -> Unit) {
 
 @Composable
 fun ActivityItemRow(
-    activityUi: ActivityItemUi, // Принимаем ActivityItemUi
-    // currentTimerFormatted: String?, // Если хотим показывать только тикающее время отдельно
+    activityUi: ActivityItemUi,
     onTimerToggle: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -239,24 +237,16 @@ fun ActivityItemRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(activityUi.baseActivity.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    // Используем displayDurationFormatted из ActivityItemUi,
-                    // который обновляется ViewModel-ом
+
                     "Сегодня: ${activityUi.displayDurationFormatted}",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                // Если вы хотите также показывать отдельно время текущей сессии, если она активна:
-                // if (activityUi.isCurrentlyActive && currentTimerFormatted != null) {
-                //    Text(
-                //        "Сессия: $currentTimerFormatted",
-                //        style = MaterialTheme.typography.bodySmall,
-                //        color = MaterialTheme.colorScheme.primary
-                //    )
-                // }
+
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onTimerToggle) {
                     Icon(
-                        // Состояние берем из activityUi.isCurrentlyActive
+
                         if (activityUi.isCurrentlyActive) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (activityUi.isCurrentlyActive) "Пауза" else "Старт",
                         tint = if (activityUi.isCurrentlyActive) MaterialTheme.colorScheme.primary else LocalContentColor.current
@@ -328,28 +318,28 @@ fun MainScreenPreview_WithData() {
         ActivityItem(id = 1, firebaseId = "a1", userId = "uid1", name = "Разработка UI", totalDurationMillisToday = 3600000L, isActive = true, createdAt = Date()),
         ActivityItem(id = 2, firebaseId = "a2", userId = "uid1", name = "Встреча с командой", totalDurationMillisToday = 1800000L, isActive = false, createdAt = Date())
     )
-    // Преобразуем ActivityItem в ActivityItemUi для превью
+
     val sampleActivitiesUi = sampleActivities.map {
         ActivityItemUi(
             baseActivity = it,
             displayDurationMillis = it.totalDurationMillisToday,
-            displayDurationFormatted = formatDuration(it.totalDurationMillisToday), // Используем локальную formatDuration
+            displayDurationFormatted = formatDuration(it.totalDurationMillisToday),
             isCurrentlyActive = it.isActive
         )
     }
     MaterialTheme {
         MainScreen(
-            uiState = MainScreenUiState( // MainScreenUiState теперь ожидает List<ActivityItemUi>
+            uiState = MainScreenUiState(
                 currentDate = "21 мая 2025",
                 dailyTotalTimeFormatted = "01:30:45",
                 goals = sampleGoals,
-                activities = sampleActivitiesUi // Передаем sampleActivitiesUi
+                activities = sampleActivitiesUi
             ),
             onDailyTimerClick = {},
             onAddActivityClick = {},
             onEditGoalClick = {},
             onDeleteActivityClick = {},
-            onActivityTimerToggle = { _-> }, // Обновленный параметр
+            onActivityTimerToggle = { _-> },
             onAddNewGoalClick = {},
             onViewAllGoalsClick = {}
         )
@@ -362,7 +352,7 @@ fun MainScreenPreview_WithData() {
 fun ActivityItemRowPreview_Active() {
     MaterialTheme {
         ActivityItemRow(
-            activityUi = ActivityItemUi( // Передаем ActivityItemUi
+            activityUi = ActivityItemUi(
                 baseActivity = ActivityItem(
                     id = 1,
                     userId = "previewUser",
@@ -371,8 +361,8 @@ fun ActivityItemRowPreview_Active() {
                     isActive = true,
                     createdAt = Date()
                 ),
-                displayDurationMillis = 7425000L, // Пример
-                displayDurationFormatted = formatDuration(7425000L), // Используем локальную formatDuration
+                displayDurationMillis = 7425000L,
+                displayDurationFormatted = formatDuration(7425000L),
                 isCurrentlyActive = true
             ),
             onTimerToggle = {},
