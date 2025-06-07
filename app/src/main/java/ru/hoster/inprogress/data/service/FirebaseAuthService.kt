@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import ru.hoster.inprogress.domain.model.AuthService
 import ru.hoster.inprogress.domain.model.Result
-import ru.hoster.inprogress.domain.model.UserData // Импортируем UserData
-import ru.hoster.inprogress.domain.model.UserRepository // Импортируем UserRepository
+import ru.hoster.inprogress.domain.model.UserData
+import ru.hoster.inprogress.domain.model.UserRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
@@ -43,7 +43,7 @@ class FirebaseAuthService @Inject constructor(
             Result.Success(Unit)
         } catch (e: Exception) {
             Log.e("FirebaseAuthService", "Sign in failed", e)
-            Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
+            Result.Error(e)
         }
     }
 
@@ -59,10 +59,8 @@ class FirebaseAuthService @Inject constructor(
                 )
                 val profileCreationResult = userRepository.createUserProfile(newUser)
                 if (profileCreationResult is Result.Error) {
-                    // Corrected line:
-                    Log.e("FirebaseAuthService", "Failed to create user profile in Firestore",profileCreationResult.message) // Use .error or your actual property name
-                    // Consider if this error should propagate:
-                    // return Result.Error(profileCreationResult.error) // If using .error
+                    Log.e("FirebaseAuthService", "Failed to create user profile in Firestore",
+                        profileCreationResult.message)
                 }
                 Result.Success(userId)
             } else {
@@ -70,7 +68,7 @@ class FirebaseAuthService @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e("FirebaseAuthService", "Sign up failed", e)
-            Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
+            Result.Error(e)
         }
     }
 
@@ -80,7 +78,7 @@ class FirebaseAuthService @Inject constructor(
             Result.Success(Unit)
         } catch (e: Exception) {
             Log.e("FirebaseAuthService", "Sign out failed", e)
-            Result.Error(e) // Assumes Result.Error constructor takes an Exception/Throwable
+            Result.Error(e)
         }
     }
 

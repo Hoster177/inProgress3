@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.di // Ваш пакет di
+package ru.hoster.inprogress.di
 
 import dagger.Binds
 import dagger.Module
@@ -15,7 +15,7 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class RepositoryModule { // Можно объединить с AuthModule или AppModule, если они абстрактные
+abstract class RepositoryModule {
 
     @Binds
     @Singleton

@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.data.repository.remote
+package ru.hoster.inprogress.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose

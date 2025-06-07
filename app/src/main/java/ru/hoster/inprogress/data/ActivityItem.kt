@@ -9,18 +9,17 @@ import java.util.Date
 
 @Entity(
     tableName = "activity_items",
-    indices = [Index(value = ["firebaseId"], unique = true)] // firebaseId должен быть уникальным, если он есть
+    indices = [Index(value = ["firebaseId"], unique = true)]
 )
 data class ActivityItem(
     @PrimaryKey(autoGenerate = true)
-    val id: Long = 0L, // Локальный автоинкрементный ID
-    val firebaseId: String? = null, // ID из Firebase, может быть null для локально созданных
-    val userId: String, // ID пользователя, которому принадлежит задача
+    val id: Long = 0L,
+    val firebaseId: String? = null,
+    val userId: String,
     val name: String,
     var totalDurationMillisToday: Long = 0L,
     var isActive: Boolean = false,
-    val colorHex: String? = null, // Assuming it's a nullable String
+    val colorHex: String? = null,
     @ServerTimestamp
-    val createdAt: Date = Date() // Дата создания или дата, к которой относится активность
-    // Добавь другие поля, если они есть, например lastUpdatedAt: Date? = null
+    val createdAt: Date = Date()
 )

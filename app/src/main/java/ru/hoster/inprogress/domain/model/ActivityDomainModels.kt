@@ -27,7 +27,7 @@ interface ActivityRepository {
     suspend fun stopSession(activityId: Long)
     fun getSessionsForDateRange(userId: String, from: Date, to: Date): Flow<List<TimerSession>>
 
-    suspend fun getAllActivities(userId: String): List<ActivityItem> // Новый метод для получения всех активностей
+    suspend fun getAllActivities(userId: String): List<ActivityItem>
 
 
 }

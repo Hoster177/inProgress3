@@ -10,7 +10,7 @@ data class GroupData(
     val adminUserId: String = "",
     val memberUserIds: List<String> = emptyList(),
     val groupCode: String? = null,
-    @ServerTimestamp val createdAt: Date? = null // Firestore заполнит это
+    @ServerTimestamp val createdAt: Date? = null
 ) {
     constructor() : this("", "Unnamed Group", null, "", emptyList(), null, null)
 }

@@ -6,7 +6,6 @@ import ru.hoster.inprogress.data.Goal
 
 
 interface GoalRepository {
-    // Здесь будут методы для работы с целями, например:
     suspend fun getGoals(userId: String): Result<List<Goal>>
     suspend fun addGoal(goal: Goal): Result<Unit>
     suspend fun updateGoal(goal: Goal): Result<Unit>

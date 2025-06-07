@@ -3,25 +3,25 @@ package ru.hoster.inprogress.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
-import ru.hoster.inprogress.data.Converters // Assuming you'll create a Converters class
+import ru.hoster.inprogress.data.Converters
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
 enum class GoalType {
-    TIME_PER_PERIOD, // e.g., X hours in Y days/week/month
-    CONSECUTIVE_DAYS // e.g., work on a task for X days in a row
+    TIME_PER_PERIOD,
+    CONSECUTIVE_DAYS
 }
 
 @Entity(tableName = "goals")
-@TypeConverters(Converters::class) // For Room to handle custom types like Enum or Date
+@TypeConverters(Converters::class)
 data class Goal(
     @PrimaryKey(autoGenerate = true)
     var id: Long = 0L,
     var firebaseId: String? = null,
-    var userId: String, // Non-nullable, no default in primary constructor
-    var title: String,  // Non-nullable, no default in primary constructor
+    var userId: String,
+    var title: String,
     var description: String?,
-    var type: GoalType, // Non-nullable, no default in primary constructor
+    var type: GoalType,
     var targetDurationMillis: Long? = null,
     var periodDays: Int? = null,
     var targetConsecutiveDays: Int? = null,

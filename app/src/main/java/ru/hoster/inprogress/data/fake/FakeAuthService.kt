@@ -30,7 +30,7 @@ class FakeAuthService(private var currentUserId: String? = "Hoster177_fake_id") 
         TODO("Not yet implemented")
     }
 
-    // Helper for testing different logged-in states
+
     fun setCurrentUserId(userId: String?) {
         this.currentUserId = userId
     }

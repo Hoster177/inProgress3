@@ -17,29 +17,25 @@ import javax.inject.Singleton
 class FirestoreSessionRepository @Inject constructor(
     private val firestore: FirebaseFirestore
 ) {
-    /** наблюдаем все сессии в коллекции sessions под конкретной задачей */
     fun getSessionsFlow(userId: String, activityFirebaseId: String): Flow<List<TimerSession>> = callbackFlow {
         Log.d("FirestoreSessionRepo", "getSessionsFlow: UserID='$userId', ForFirebaseActivityID='$activityFirebaseId'")
         val listenerRegistration = firestore
             .collection("users").document(userId)
-            .collection("activities").document(activityFirebaseId) // <-- ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ FIREBASE_ID
+            .collection("activities").document(activityFirebaseId)
             .collection("sessions").orderBy("startTime", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
                     Log.w("FirestoreSessionRepo", "getSessionsFlow listen error", e)
-                    close(e) // Закрыть Flow с ошибкой
+                    close(e)
                     return@addSnapshotListener
                 }
                 val sessions = snapshots?.mapNotNull { doc ->
                     try {
-                        // Преобразование документа Firestore в TimerSession
-                        // Важно: TimerSession должен иметь конструктор без аргументов или поля по умолчанию для toObject()
-                        // Или вы мапите поля вручную.
-                        val firestoreSession = doc.toObject<FirestoreSessionData>() // Промежуточный data class
+                        val firestoreSession = doc.toObject<FirestoreSessionData>()
                         TimerSession(
-                            id = 0L, // Firestore ID не всегда нужен здесь, или можно взять doc.id
-                            activityId = firestoreSession.localActivityId ?: 0L, // Если сохраняли localActivityId
-                            userId = userId, // userId из параметра, т.к. он не хранится в документе сессии
+                            id = 0L,
+                            activityId = firestoreSession.localActivityId ?: 0L,
+                            userId = userId,
                             startTime = firestoreSession.startTime ?: Date(0),
                             endTime = firestoreSession.endTime
                         )
@@ -57,16 +53,13 @@ class FirestoreSessionRepository @Inject constructor(
         }
     }
 
-    /**
-     * Добавляет новую сессию таймера в Firestore.
-     * activityId из объекта сессии используется для определения пути.
-     */
+
     suspend fun addSession(userId: String, activityFirebaseId: String, session: TimerSession) {
         val sessionData = hashMapOf(
             "startTime" to session.startTime,
             "endTime" to session.endTime,
-            "localActivityId" to session.activityId, // Опционально, для отладки или связи
-            "localSessionId" to session.id // Опционально
+            "localActivityId" to session.activityId,
+            "localSessionId" to session.id
         )
         Log.d("FirestoreSessionRepo", "addSession: UserID='$userId', ForFirebaseActivityID='$activityFirebaseId', SessionStartTime=${session.startTime}")
 
@@ -74,27 +67,23 @@ class FirestoreSessionRepository @Inject constructor(
             .collection("users")
             .document(userId)
             .collection("activities")
-            .document(activityFirebaseId) // <-- ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ FIREBASE_ID
+            .document(activityFirebaseId)
             .collection("sessions")
-            .add(sessionData) // Firestore сгенерирует ID для документа сессии
+            .add(sessionData)
             .await()
         Log.i("FirestoreSessionRepo", "addSession: Session added to Firestore under users/$userId/activities/$activityFirebaseId/sessions")
     }
 
-    /**
-     * Обновляет endTime конкретной сессии таймера в Firestore.
-     * Сессия идентифицируется по userId, activityId и её startTime.
-     */
+
     suspend fun updateSessionEndTime(userId: String, activityFirebaseId: String, sessionStartTime: Date, newEndTime: Date) {
         Log.d("FirestoreSessionRepo", "updateSessionEndTime: UserID='$userId', ForFirebaseActivityID='$activityFirebaseId', SessionStartTime=$sessionStartTime")
         val sessionsRef = firestore
             .collection("users")
             .document(userId)
             .collection("activities")
-            .document(activityFirebaseId) // <-- ИСПОЛЬЗUЕМ ПРАВИЛЬНЫЙ FIREBASE_ID
+            .document(activityFirebaseId)
             .collection("sessions")
 
-        // Находим сессию по времени начала (предполагая, что startTime уникально для activity/user)
         val querySnapshot = sessionsRef.whereEqualTo("startTime", sessionStartTime).limit(1).get().await()
 
         if (!querySnapshot.isEmpty) {
@@ -111,5 +100,4 @@ data class FirestoreSessionData(
     val startTime: Date? = null,
     val endTime: Date? = null,
     val localActivityId: Long? = null
-    // добавьте другие поля, если они есть в Firestore
 )

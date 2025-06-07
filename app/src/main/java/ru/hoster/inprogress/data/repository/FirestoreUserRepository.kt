@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import ru.hoster.inprogress.domain.model.UserData
 import ru.hoster.inprogress.domain.model.UserRepository
-import ru.hoster.inprogress.domain.model.Result // Ваш Result класс
+import ru.hoster.inprogress.domain.model.Result
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
@@ -37,9 +37,6 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
             return Result.Success(emptyList())
         }
         return try {
-            // Firestore 'in' query supports up to 10 items in the list.
-            // For more, you'd need multiple queries or a different approach.
-            // This example assumes userIds.size <= 10 or proper chunking is handled elsewhere.
             val querySnapshot = usersCollection.whereIn("userId", userIds).get().await()
             val users = querySnapshot.toObjects(UserData::class.java)
             Result.Success(users)
@@ -50,7 +47,6 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
 
     override suspend fun createUserProfile(user: UserData): Result<Unit> {
         return try {
-            // Используем userId как ID документа в Firestore для легкого доступа
             usersCollection.document(user.userId).set(user).await()
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -76,13 +72,13 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("FirestoreUserRepo", "Listen failed.", error)
-                    close(error) // Закрываем flow с ошибкой
+                    close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
                     trySend(snapshot.toObject<UserData>()).isSuccess
                 } else {
-                    trySend(null).isSuccess // Пользователь не найден или документ пуст
+                    trySend(null).isSuccess
                 }
             }
         awaitClose { listenerRegistration.remove() }
@@ -90,11 +86,10 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
 
     override suspend fun updateUserProfile(user: UserData): Result<Unit> {
         return try {
-            // Ensure userId is not empty
             if (user.userId.isBlank()) {
                 return Result.Error(IllegalArgumentException("User ID cannot be blank for update."))
             }
-            usersCollection.document(user.userId).set(user).await() // Or .update() for specific fields
+            usersCollection.document(user.userId).set(user).await()
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -102,18 +97,17 @@ class FirestoreUserRepository @Inject constructor() : UserRepository {
     }
     suspend fun updateUserProfile(userId: String, name: String, avatarId: String): Boolean {
         if (userId.isBlank()) {
-            // Log error or handle appropriately
+
             return false
         }
         return try {
             val updates = mapOf(
                 "displayName" to name,
-                "avatarUrl" to avatarId // Assuming avatarId is the new URL or identifier for the avatar
+                "avatarUrl" to avatarId
             )
             usersCollection.document(userId).update(updates).await()
             true
         } catch (e: Exception) {
-            // Log the exception (e.g., using Timber or Log.e)
             false
         }
     }

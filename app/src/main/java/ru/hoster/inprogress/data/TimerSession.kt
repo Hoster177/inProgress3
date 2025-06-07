@@ -22,10 +22,9 @@ data class TimerSession(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,
 
-    /** ссылка на задачу (ActivityItem.id) */
+
     val activityId: Long,
 
-    /** дублируем userId для простого фильтра по пользователю */
     val userId: String,
 
     /** время старта сессии */

@@ -1,4 +1,4 @@
-package ru.hoster.inprogress.data.repository // Убедитесь, что пакет правильный
+package ru.hoster.inprogress.data.repository
 
 import ru.hoster.inprogress.domain.model.GroupData
 import ru.hoster.inprogress.domain.model.GroupRepository
@@ -19,7 +19,7 @@ class FirestoreGroupRepository @Inject constructor(
         private const val GROUPS_COLLECTION = "groups"
     }
 
-    override suspend fun getGroupById(groupId: String): Result<GroupData?> { // Этот метод остается как был
+    override suspend fun getGroupById(groupId: String): Result<GroupData?> {
         return try {
             val documentSnapshot = firestore.collection(GROUPS_COLLECTION).document(groupId).get().await()
             val group = documentSnapshot.toObject(GroupData::class.java)
@@ -29,7 +29,7 @@ class FirestoreGroupRepository @Inject constructor(
         }
     }
 
-    override suspend fun getGroupsForUser(userId: String): Result<List<GroupData>> { // Этот метод остается как был
+    override suspend fun getGroupsForUser(userId: String): Result<List<GroupData>> {
         return try {
             val querySnapshot = firestore.collection(GROUPS_COLLECTION)
                 .whereArrayContains("memberUserIds", userId)
@@ -42,12 +42,9 @@ class FirestoreGroupRepository @Inject constructor(
         }
     }
 
-    // Метод insertGroup из вашего предыдущего сообщения, но теперь исправленный
     override suspend fun insertGroup(group: GroupData): Result<String> {
         return try {
-            val documentRef = firestore.collection(GROUPS_COLLECTION).document() // Авто-генерация ID
-            // 'group.createdAt' должен быть null, чтобы @ServerTimestamp сработал.
-            // Копируем 'id' в объект, предполагая, что 'createdAt' уже null по умолчанию в GroupData.
+            val documentRef = firestore.collection(GROUPS_COLLECTION).document()
             val groupToSave = group.copy(id = documentRef.id)
             documentRef.set(groupToSave).await()
             Result.Success(documentRef.id)
@@ -56,7 +53,7 @@ class FirestoreGroupRepository @Inject constructor(
         }
     }
 
-    override suspend fun updateGroup(group: GroupData): Result<Unit> { // Этот метод остается как был
+    override suspend fun updateGroup(group: GroupData): Result<Unit> {
         return try {
             firestore.collection(GROUPS_COLLECTION).document(group.id)
                 .set(group, SetOptions.merge())
@@ -67,7 +64,7 @@ class FirestoreGroupRepository @Inject constructor(
         }
     }
 
-    override suspend fun removeUserFromGroup(groupId: String, userId: String): Result<Unit> { // Этот метод остается как был
+    override suspend fun removeUserFromGroup(groupId: String, userId: String): Result<Unit> {
         return try {
             firestore.collection(GROUPS_COLLECTION).document(groupId)
                 .update("memberUserIds", FieldValue.arrayRemove(userId))
@@ -78,7 +75,7 @@ class FirestoreGroupRepository @Inject constructor(
         }
     }
 
-    override suspend fun addUserToGroup(groupId: String, userId: String): Result<Unit> { // Этот метод остается как был
+    override suspend fun addUserToGroup(groupId: String, userId: String): Result<Unit> {
         return try {
             firestore.collection(GROUPS_COLLECTION).document(groupId)
                 .update("memberUserIds", FieldValue.arrayUnion(userId))
@@ -92,7 +89,7 @@ class FirestoreGroupRepository @Inject constructor(
     override suspend fun findGroupByCode(groupCode: String): Result<GroupData?> {
         return try {
             val querySnapshot = firestore.collection(GROUPS_COLLECTION)
-                .whereEqualTo("groupCode", groupCode.uppercase()) // Store and query codes in uppercase for case-insensitivity
+                .whereEqualTo("groupCode", groupCode.uppercase())
                 .limit(1)
                 .get()
                 .await()

@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import ru.hoster.inprogress.data.TimerSession
 import ru.hoster.inprogress.data.local.TimerSessionDao
-// import ru.hoster.inprogress.data.repository.remote.FirestoreActivityRepository // Assuming this is not used directly now for sync
+// import ru.hoster.inprogress.data.repository.FirestoreActivityRepository // Assuming this is not used directly now for sync
 import ru.hoster.inprogress.di.ApplicationScope
 import java.util.Date
 import java.text.SimpleDateFormat

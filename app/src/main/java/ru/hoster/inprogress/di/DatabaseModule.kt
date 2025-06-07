@@ -13,39 +13,32 @@ import ru.hoster.inprogress.data.local.TimerSessionDao
 import javax.inject.Singleton
 
 @Module
-@InstallIn(SingletonComponent::class) // Зависимости будут жить пока живо приложение
+@InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
     @Provides
-    @Singleton // Гарантирует, что будет только один экземпляр AppDatabase
+    @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(
             context.applicationContext,
             AppDatabase::class.java,
             "inprogress_database"
         )
-            // .fallbackToDestructiveMigration() // Для разработки. Удали или замени на миграции для продакшена.
+
             .build()
     }
 
     @Provides
-    @Singleton // Dao обычно тоже синглтоны, так как они привязаны к единственному экземпляру БД
+    @Singleton
     fun provideActivityDao(appDatabase: AppDatabase): ActivityDao {
         return appDatabase.activityDao()
     }
 
     @Provides
-    @Singleton // Dao обычно тоже синглтоны, так как они привязаны к единственному экземпляру БД
+    @Singleton
     fun provideTimerSessionDao(appDatabase: AppDatabase): TimerSessionDao {
         return appDatabase.timerSessionDao()
     }
 
-    // Если у тебя есть GoalDao, добавь аналогичный @Provides метод для него:
-    /*
-    @Provides
-    @Singleton
-    fun provideGoalDao(appDatabase: AppDatabase): GoalDao {
-        return appDatabase.goalDao()
-    }
-    */
+
 }

@@ -12,7 +12,7 @@ class FakeGroupRepository : GroupRepository {
     private val groups = mutableMapOf<String, GroupData>()
 
     init {
-        // Pre-populate with some fake groups
+
         val group1Id = "group_id_1"
         val group2Id = "group_id_2"
         val adminUser = "user_admin_123"
@@ -58,13 +58,13 @@ class FakeGroupRepository : GroupRepository {
     }
 
     override suspend fun getGroupById(groupId: String): Result<GroupData?> {
-        delay(500) // Simulate network delay
+        delay(500)
         val group = groups[groupId]
         return if (group != null) {
             Result.Success(group)
         } else {
-            // Result.Success(null) // To indicate group not found but no system error
-            Result.Error(Exception("FakeRepo: Group with ID $groupId not found.")) // Or an error
+
+            Result.Error(Exception("FakeRepo: Group with ID $groupId not found."))
         }
     }
 
@@ -81,24 +81,17 @@ class FakeGroupRepository : GroupRepository {
     }
 
     override suspend fun removeUserFromGroup(groupId: String, userId: String): Result<Unit> {
-        delay(700) // Simulate network delay
+        delay(700)
         val group = groups[groupId]
         return if (group == null) {
             Result.Error(Exception("FakeRepo: Group with ID $groupId not found for removal."))
         } else {
             if (!group.memberUserIds.contains(userId)) {
-                // Optionally treat as error or success if user wasn't a member
-                // return Result.Error(Exception("FakeRepo: User $userId not in group $groupId."))
                 println("FakeRepo: User $userId was not in group $groupId, no action taken.")
-                Result.Success(Unit) // User wasn't there, so effectively removed
+                Result.Success(Unit)
             } else {
                 val updatedMembers = group.memberUserIds.filterNot { it == userId }
-                // Handle admin leaving scenario (simplified: if admin leaves, make someone else admin or delete group)
-                // For this fake, we'll just remove. A real implementation needs more robust logic.
                 if (userId == group.adminUserId && updatedMembers.isEmpty()) {
-                    // This scenario is tricky. The ViewModel has a check, but repo could also enforce rules.
-                    // For simplicity, let's allow removal here and let ViewModel handle UI message.
-                    // OR: return Result.Error(Exception("Admin cannot be removed if it leaves group empty/adminless without transfer"))
                     println("FakeRepo: Admin $userId removed, leaving group $groupId potentially adminless or empty.")
                 }
                 groups[groupId] = group.copy(memberUserIds = updatedMembers)
@@ -115,7 +108,7 @@ class FakeGroupRepository : GroupRepository {
         TODO("Not yet implemented")
     }
 
-    // --- Helper methods for testing ---
+
     fun clearGroups() {
         groups.clear()
     }

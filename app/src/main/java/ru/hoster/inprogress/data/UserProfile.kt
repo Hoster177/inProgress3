@@ -7,13 +7,13 @@ import java.util.Date
 
 @Entity(tableName = "user_profiles")
 data class UserProfile(
-    @PrimaryKey // UID from Firebase Auth will be the primary key
+    @PrimaryKey
     var uid: String = "",
 
     var email: String? = null,
     var displayName: String? = null,
     var avatarUrl: String? = null,
-    var status: String? = null, // Max 300 chars
+    var status: String? = null,
 
     var xp: Long = 0L,
     var level: Int = 1,
@@ -23,10 +23,9 @@ data class UserProfile(
     var consecutiveLoginDays: Int = 0,
 
     @ServerTimestamp
-    var createdAt: Date? = null, // When the profile was first created in your DB
+    var createdAt: Date? = null,
 
-    var appLanguage: String = "ru" // Default language 'ru' or 'en'
+    var appLanguage: String = "ru"
 ) {
-    // No-argument constructor for Firebase
     constructor() : this("", null, null, null, null, 0L, 1, null, 0, null, "ru")
 }

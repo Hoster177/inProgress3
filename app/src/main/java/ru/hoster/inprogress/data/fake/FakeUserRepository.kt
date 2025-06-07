@@ -11,7 +11,7 @@ class FakeUserRepository : UserRepository {
     private val users = mutableMapOf<String, UserData>()
 
     init {
-        // Pre-populate with some fake users
+
         addUser(UserData(userId = "Hoster177_fake_id", displayName = "Hoster177 (You)", avatarUrl = null))
         addUser(UserData(userId = "user_admin_123", displayName = "Alice Admin", avatarUrl = "https://example.com/alice.png"))
         addUser(UserData(userId = "user_member_3", displayName = "Bob Member", avatarUrl = null))
@@ -28,16 +28,12 @@ class FakeUserRepository : UserRepository {
     }
 
     override suspend fun getUsersByIds(userIds: List<String>): Result<List<UserData>> {
-        delay(300) // Simulate network delay
+        delay(300)
         val foundUsers = userIds.mapNotNull { users[it] }
         return if (foundUsers.isNotEmpty() || userIds.isEmpty()) {
             Result.Success(foundUsers)
         } else {
-            // If some users were requested but none found (e.g., all IDs were invalid)
-            // Depending on strictness, this could be an empty success or an error.
-            // For simplicity, returning success with empty list if no specific error condition is met.
-            // If you want to return error if ANY id is not found, logic would be more complex.
-            Result.Success(emptyList()) // Or Result.Error(Exception("Some users not found"))
+            Result.Success(emptyList())
         }
     }
 

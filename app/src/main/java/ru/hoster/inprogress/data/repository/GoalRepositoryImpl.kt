@@ -8,11 +8,8 @@ import ru.hoster.inprogress.domain.model.Result
 import javax.inject.Inject
 import javax.inject.Singleton
 
-@Singleton // Важно для Hilt, если репозиторий должен быть синглтоном
+@Singleton
 class GoalRepositoryImpl @Inject constructor(
-    // Сюда можно внедрить зависимости, например, DAO для Room или сервис для Firestore
-    // private val goalDao: GoalDao, // Пример для локальной базы данных
-    // private val firestoreService: YourFirestoreServiceForGoals // Пример для удаленного источника
 ) : GoalRepository {
     override suspend fun getGoals(userId: String): Result<List<Goal>> {
         TODO("Not yet implemented")

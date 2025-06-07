@@ -15,10 +15,10 @@ class FakeActivityRepository : ActivityRepository {
     private var localIdCounter = 1L
 
     init {
-        // Pre-populate with some fake activities
+
         val activity1Id = "activity_id_fake_1"
         val activity2Id = "activity_id_fake_2"
-        val currentUser = "Hoster177_fake_id" // Assuming this aligns with FakeAuthService
+        val currentUser = "Hoster177_fake_id"
 
         addActivity(
             ActivityData(

@@ -35,7 +35,6 @@ fun AchievementsScreen(
             )
         }
     ) { paddingValues ->
-        // Dummy data for preview
         val achievements = listOf(
             "Войти 7 дней подряд",
             "10 часов с таймером",
